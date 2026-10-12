@@ -59,44 +59,17 @@ For your own clients, see the [opentyg-sdk branch](https://github.com/zjmdong/Op
 
 ## Quick start
 
-Public images support **amd64 / arm64**, with no source download or GitHub login required. Pin a release version:
+Install Docker and the Docker Compose plugin on your Linux server or NAS, then run:
 
 ```sh
-docker pull ghcr.io/zjmdong/opentyg:1.2.1
+curl -fsSL -o install.sh https://raw.githubusercontent.com/zjmdong/OpenTYG/main/install.sh && bash install.sh --lang=en
 ```
 
-[Container package](https://github.com/zjmdong/OpenTYG/pkgs/container/opentyg) · [Deployment-only bundle](https://github.com/zjmdong/OpenTYG/releases/download/v1.2.1/OpenTYG-deploy-v1.2.1.zip). Images contain no user data or secrets; configure an HTTPS origin, persistent storage, and a separate secret before starting.
+Follow the prompts for your HTTPS address, storage location, and internal port; Enter accepts defaults. The installer prepares permissions and a first-time secret, writes one `docker-compose.yml`, pulls the image, and checks startup. No source checkout or `.env` is needed. Existing configuration and secrets are preserved by default.
 
-These commands target a Linux host with Docker Engine, the Compose plugin, OpenSSL, curl, and unzip. See the [deployment guide](docs/deployment.en.md) for complete instructions and alternatives.
+Then configure an HTTPS reverse proxy using the address and target printed by the installer. See the short [deployment guide](docs/deployment.en.md).
 
-```sh
-mkdir -p OpenTYG
-cd OpenTYG
-curl -fL -o OpenTYG-deploy-v1.2.1.zip https://github.com/zjmdong/OpenTYG/releases/download/v1.2.1/OpenTYG-deploy-v1.2.1.zip
-curl -fL -o DEPLOY-SHA256SUMS.txt https://github.com/zjmdong/OpenTYG/releases/download/v1.2.1/DEPLOY-SHA256SUMS.txt
-sha256sum -c DEPLOY-SHA256SUMS.txt
-unzip OpenTYG-deploy-v1.2.1.zip
-cp .env.example .env
-```
-
-Edit `.env` and set `PUBLIC_ORIGIN` to your public HTTPS address, for example `https://opentyg.example.com`. Include a nonstandard port when applicable, such as `https://opentyg.example.com:8443`.
-
-For the first deployment, generate a secret and prepare permissions for the default container user:
-
-```sh
-mkdir -p data secrets
-(umask 077; set -C; openssl rand -base64 32 > secrets/opentyg_secret.txt)
-sudo chown -R 10001:10001 data secrets
-sudo chmod 700 data secrets
-sudo chmod 600 secrets/opentyg_secret.txt
-docker compose pull
-docker compose up -d
-curl -fsS http://127.0.0.1:8080/api/health
-```
-
-The generation command refuses to overwrite an existing secret. **Preserve the original `data/` and `secrets/` during upgrades and migrations; do not regenerate the secret.** If you change the UID/GID in `.env`, update the ownership of both directories and the secret file to match.
-
-Configure your domain, a valid certificate, and an HTTPS reverse proxy targeting `http://127.0.0.1:8080`. A [sample Nginx configuration](deploy/nginx-opentyg.conf) is included. By default the HTTP port is bound to loopback; users access the configured HTTPS origin. Opening the internal HTTP address directly does not support production login.
+[Container package](https://github.com/zjmdong/OpenTYG/pkgs/container/opentyg) · [Installer](install.sh) · [Compose reference](docker-compose.yml). Images support **amd64 / arm64** and anonymous pulls. Preserve data and the original secret when upgrading.
 
 ## Install on a phone
 

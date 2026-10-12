@@ -42,3 +42,55 @@ jobs:
             opentyg:verify
           curl --retry 10 --retry-delay 1 --retry-all-errors --retry-max-time 30 --connect-timeout 3 --max-time 5 -fsS http://127.0.0.1:8787/api/health
           docker exec opentyg-verify node deploy/healthcheck.mjs
+
+  installer:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check installer syntax
+        shell: bash
+        run: |
+          bash -n install.sh
+          if command -v shellcheck >/dev/null; then shellcheck install.sh; fi
+      - name: Install, rerun, reconfigure, and protect existing keys
+        shell: bash
+        run: |
+          set -euo pipefail
+          install_dir="$RUNNER_TEMP/OpenTYG installer"
+          data_dir="$RUNNER_TEMP/storage space \$literal 数据"
+          secret_file="$install_dir/secrets/opentyg_secret.txt"
+          held_key="$RUNNER_TEMP/opentyg-held-key"
+          trap 'if [[ -f "$held_key" ]]; then sudo mv -- "$held_key" "$secret_file"; fi; docker rm -f opentyg >/dev/null 2>&1 || true' EXIT
+          printf '%s\n' "$install_dir" "$data_dir" '' 'https://opentyg.example.com:8443' 1 8088 '' '' '' | sudo bash install.sh --lang=en
+          test ! -f "$install_dir/.env"
+          test "$(docker inspect --format '{{.Config.User}}' opentyg)" = "$(id -u):$(id -g)"
+          test "$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Source}}{{end}}{{end}}' opentyg)" = "$data_dir"
+          test "$(stat -c %a "$secret_file")" = 600
+          secret_hash=$(sha256sum "$secret_file")
+          data_key_hash=$(sha256sum "$data_dir/.app-secret")
+          printf '%s\n' "$install_dir" 1 | sudo bash install.sh --lang=en
+          test "$(sha256sum "$secret_file")" = "$secret_hash"
+          printf '%s\n' "$install_dir" 2 "$data_dir" '' 'https://opentyg.example.com:8443' 1 8089 '' '' '' | sudo bash install.sh --lang=en
+          test "$(sha256sum "$secret_file")" = "$secret_hash"
+          test "$(sha256sum "$data_dir/.app-secret")" = "$data_key_hash"
+          compgen -G "$install_dir/docker-compose.yml.*.bak" >/dev/null
+          curl -fsS http://127.0.0.1:8089/api/health
+          curl -fsS -H 'Host: opentyg.example.com:8443' http://127.0.0.1:8089/ > "$RUNNER_TEMP/installer-page.html"
+          grep -q OpenTYG "$RUNNER_TEMP/installer-page.html"
+          sudo mv -- "$secret_file" "$held_key"
+          if printf '%s\n' "$install_dir" 2 "$data_dir" '' | sudo bash install.sh --lang=en > "$RUNNER_TEMP/installer-missing-key.log" 2>&1; then
+            echo 'Installer unexpectedly accepted existing data without its original secret.' >&2
+            exit 1
+          fi
+          grep -q 'Existing data has no matching secret' "$RUNNER_TEMP/installer-missing-key.log"
+          test ! -e "$secret_file"
+          sudo mv -- "$held_key" "$secret_file"
+          test "$(sha256sum "$secret_file")" = "$secret_hash"
+          echo 'Verified guided installation, caller UID/GID, custom paths with spaces and literal dollars, reruns, config backup, port changes, preserved encryption keys, and missing-key refusal.' >> "$GITHUB_STEP_SUMMARY"

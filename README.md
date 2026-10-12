@@ -59,44 +59,17 @@ TYG Core SDK 是本项目的**非官方协议适配实现**，不是桃园谷官
 
 ## 快速开始
 
-公开镜像支持 **amd64 / arm64**，无需下载源码或登录 GitHub。推荐固定版本：
+在 Linux 服务器或 NAS 上启用 Docker 和 Docker Compose 插件，然后执行：
 
 ```sh
-docker pull ghcr.io/zjmdong/opentyg:1.2.1
+curl -fsSL -o install.sh https://raw.githubusercontent.com/zjmdong/OpenTYG/main/install.sh && bash install.sh
 ```
 
-[镜像与版本](https://github.com/zjmdong/OpenTYG/pkgs/container/opentyg) · [仅部署配置包](https://github.com/zjmdong/OpenTYG/releases/download/v1.2.1/OpenTYG-deploy-v1.2.1.zip)。镜像不包含用户数据或密钥；启动前仍需配置域名、持久目录和独立密钥。
+按提示填写 HTTPS 地址、数据目录和内网端口，其余通常直接回车。脚本自动准备权限、生成首次密钥、写入一个 `docker-compose.yml`、拉取镜像并检查启动；无需源码和 `.env`。已有配置和密钥默认保留。
 
-以下命令适用于安装了 Docker Engine、Compose 插件、OpenSSL、curl 和 unzip 的 Linux 主机。完整步骤及其他部署方式见 [部署指南](docs/deployment.md)。
+最后在反向代理中填入脚本显示的公网地址与内网目标。步骤见精简的 [部署指南](docs/deployment.md)。
 
-```sh
-mkdir -p OpenTYG
-cd OpenTYG
-curl -fL -o OpenTYG-deploy-v1.2.1.zip https://github.com/zjmdong/OpenTYG/releases/download/v1.2.1/OpenTYG-deploy-v1.2.1.zip
-curl -fL -o DEPLOY-SHA256SUMS.txt https://github.com/zjmdong/OpenTYG/releases/download/v1.2.1/DEPLOY-SHA256SUMS.txt
-sha256sum -c DEPLOY-SHA256SUMS.txt
-unzip OpenTYG-deploy-v1.2.1.zip
-cp .env.example .env
-```
-
-编辑 `.env`，把 `PUBLIC_ORIGIN` 改为你的公网 HTTPS 地址，例如 `https://opentyg.example.com`。如果使用非标准端口，必须包含端口，例如 `https://opentyg.example.com:8443`。
-
-首次部署生成密钥，并为默认容器用户准备权限：
-
-```sh
-mkdir -p data secrets
-(umask 077; set -C; openssl rand -base64 32 > secrets/opentyg_secret.txt)
-sudo chown -R 10001:10001 data secrets
-sudo chmod 700 data secrets
-sudo chmod 600 secrets/opentyg_secret.txt
-docker compose pull
-docker compose up -d
-curl -fsS http://127.0.0.1:8080/api/health
-```
-
-密钥生成命令会拒绝覆盖已有文件。**升级或迁移时保留原有 `data/` 和 `secrets/`，不要重新生成密钥。** 如果修改了 `.env` 中的 UID/GID，目录和密钥文件的所有者也要一致。
-
-接着配置域名、有效证书和 HTTPS 反向代理，指向 `http://127.0.0.1:8080`。可参考 [Nginx 示例](deploy/nginx-opentyg.conf)。默认只把 HTTP 端口绑定到本机；用户从配置的 HTTPS 地址访问应用。直接打开内部 HTTP 地址不能完成生产登录。
+[公开镜像](https://github.com/zjmdong/OpenTYG/pkgs/container/opentyg) · [安装脚本](install.sh) · [Compose 参考](docker-compose.yml)。支持 **amd64 / arm64**，无需登录。升级保留数据和原密钥。
 
 ## 手机安装
 

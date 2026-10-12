@@ -4,15 +4,17 @@
 
 ## Docker Compose
 
-复制 `.env.example` 为 `.env`。Compose 读取这些变量；生产配置固定启用 Secure Cookie，并关闭本机开发模式。密钥从独立文件挂载，不能写进镜像或提交到 Git。
+安装脚本会把填写的配置直接写入 `docker-compose.yml`，无需 `.env`。下表用于手动使用仓库的 Compose 模板；可通过环境变量或可选 `.env` 传值。生产配置固定启用 Secure Cookie，并关闭本机开发模式。密钥从独立文件挂载，不能写进镜像或提交到 Git。
 
-Copy `.env.example` to `.env`. Compose reads these variables, enables Secure cookies, and disables local development mode. The application secret is mounted from a separate file; never embed it in an image or commit it.
+The installer writes configuration directly into `docker-compose.yml`, without an `.env`. The table below applies to the repository Compose template; use environment variables or an optional `.env`. It enables Secure cookies, and disables local development mode. The application secret is mounted from a separate file; never embed it in an image or commit it.
 
 | 变量 / Variable | 默认值 / Default | 用途 / Purpose |
 | --- | --- | --- |
 | `PUBLIC_ORIGIN` | 必填 / Required | 浏览器的完整 HTTPS origin；含非标准端口，无路径。Exact browser-facing HTTPS origin, including a nonstandard port, without a path. |
 | `LAN_BIND_IP` | `127.0.0.1` | 主机 HTTP 绑定地址；远程代理需改为受控内网地址。Host HTTP binding; use a restricted private address for a remote proxy. |
 | `APP_PORT` | `8080` | 主机端口，映射到容器 `8787`。Host port mapped to container port `8787`. |
+| `APP_DATA_DIR` | `./data` | 数据挂载目录；首次需提前创建。Data bind-mount directory; create before first start. |
+| `APP_SECRET_PATH` | `./secrets/opentyg_secret.txt` | 外部密钥文件路径。External secret file path. |
 | `APP_UID` / `APP_GID` | `10001` / `10001` | 容器数值身份，须匹配数据和密钥文件权限。Numeric container identity; match data and secret ownership. |
 | `OPENTYG_VERSION` | `1.2.1` | 拉取的公开镜像版本；建议固定 Release，`latest` 跟随稳定版。Public image version; pin a release, or use `latest` for the current stable image. |
 | `NODE_IMAGE` | `node:24-alpine` | 仅用于 `docker-compose.build.yml` 源码构建覆盖文件。构建基础镜像；使用兼容的官方 Alpine Node 镜像，可固定 digest。Only used by the source-build override `docker-compose.build.yml`. Build base; use a compatible official Alpine Node image, optionally pinned by digest. |
@@ -67,3 +69,17 @@ node server/index.mjs
 打开 `http://127.0.0.1:8787`。本机模式仍验证 Host、Origin 和请求标记，禁止绑定 `0.0.0.0` 或内网地址。对外发布始终使用生产 HTTPS 配置。
 
 Open `http://127.0.0.1:8787`. Local mode still validates Host, Origin, and request markers, and refuses wildcard or LAN binding. Always use production HTTPS settings for public deployment.
+
+## 从源码构建 / Build from source
+
+仅贡献者需要完整源码。配置好 Compose 模板所需变量、数据和密钥后，在仓库根目录执行：
+
+Only contributors need the complete source. Configure the template variables, data, and secret first, then run at the repository root:
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+```
+
+安装脚本生成的配置直接拉取已发布镜像。它固定部署值，不读取上表中的环境变量；修改生成的 Compose 文件即可更换端口、镜像版本或目录。
+
+Installer-generated configuration pulls the published image and uses explicit values instead of the variables above. Edit the generated Compose file to change ports, image versions, or paths.
