@@ -12,7 +12,9 @@
 
 OpenTYG is a self-hosted web application for signing in with an existing Taoyuangu account, selecting a property, organizing frequently used doors, and requesting remote door access. One Node.js service hosts the frontend and backend. Deploy with Docker without a frontend build or a separate database.
 
-This is an independent project with no affiliation to Taoyuangu. An existing account and valid door permissions are required; the application does not grant or bypass platform permissions. The application interface is currently in Simplified Chinese; project documentation is available in Chinese and English.
+**This application has no affiliation, partnership, or authorization relationship with Taoyuangu or its affiliates. It is not endorsed or supported by the official platform.** An existing account and valid door permissions are required; the application does not grant or bypass platform permissions. Use it responsibly, only with accounts and devices you own or are explicitly authorized to operate, and comply with applicable laws, platform terms, and property rules. Users are responsible for their actions and consequences, independently of the project author. To the extent permitted by applicable law, the author and contributors accept no liability arising from use or misuse. See the [disclaimer](DISCLAIMER.md).
+
+The application interface is currently in Simplified Chinese; project documentation is available in Chinese and English.
 
 ## Features
 
@@ -22,6 +24,38 @@ This is an independent project with no affiliation to Taoyuangu. An existing acc
 - **Connection preparation**: prepare door connections after login and when returning to the foreground; check directory context and permissions before sending a command.
 - **Private storage**: encrypt remembered login state and preferences on the server; upstream login tokens and door credentials are never returned to the browser.
 - **Simple deployment**: one container, one port, no npm runtime dependencies, a health check, and an HTTPS reverse proxy example.
+
+## Screenshots
+
+These screenshots were captured against an isolated offline demonstration service. All accounts, properties, and doors are fictional; no real residents or devices are shown. They display the existing interface. The demonstration service is not included in production deployments.
+
+<table>
+  <tr>
+    <td align="center"><strong>Login and installation</strong><br><img src="docs/screenshots/login.png" width="240" alt="SMS login and PWA installation"></td>
+    <td align="center"><strong>Favorite doors</strong><br><img src="docs/screenshots/home.png" width="240" alt="Home screen door buttons"></td>
+    <td align="center"><strong>All doors</strong><br><img src="docs/screenshots/doors.png" width="240" alt="Door directory and reorder entry"></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Settings and properties</strong><br><img src="docs/screenshots/settings.png" width="240" alt="Dark theme, demo account, and property selection"></td>
+    <td align="center"><strong>Names and favorites</strong><br><img src="docs/screenshots/door-settings.png" width="240" alt="Door name and favorite position settings"></td>
+    <td align="center">Light / dark themes<br>Mobile browser / PWA</td>
+  </tr>
+</table>
+
+## Built on the TYG SDK
+
+OpenTYG communicates with the platform through **TYG Core SDK (`TygClient`)**. The SDK handles service configuration, image captchas, SMS and password login, property permissions, door authorization, and WebSocket directory and door messages. OpenTYG adds the web interface, browser sessions, authentication limits, encrypted storage, and user preferences.
+
+```mermaid
+flowchart LR
+    UI[Mobile browser / PWA] --> Backend[OpenTYG backend]
+    Backend --> SDK[TYG Core SDK / TygClient]
+    SDK -->|HTTP + WebSocket| Platform[Taoyuangu platform]
+```
+
+TYG Core SDK is an **unofficial protocol adapter**, not an SDK supplied or maintained by Taoyuangu. The application embeds a server-oriented adaptation under `server/vendor/tyg-core-sdk/`, with host restrictions, stable door identifiers, and credential handling changes. Its source differs from the standalone SDK. The web application currently provides door access and does not expose the standalone SDK's intercom features.
+
+For your own clients, see the [opentyg-sdk branch](https://github.com/zjmdong/OpenTYG/tree/opentyg-sdk) and its [Taoyuangu platform API reference](https://github.com/zjmdong/OpenTYG/blob/opentyg-sdk/docs/platform-api.md). That reference describes platform HTTP, WebSocket, XML, and SIP/RTP protocols. The `docs/api.md` file in this branch documents OpenTYG's own backend.
 
 ## Quick start
 
@@ -65,7 +99,9 @@ Once installed, the application opens in a standalone window from the home scree
 | [Configuration](docs/configuration.md) | Environment variables, runtime identity, upstream hosts, and local development |
 | [Architecture](docs/architecture.md) | Browser, backend, platform services, and storage |
 | [Privacy and operations](docs/security.md) | Credential lifecycle, encryption boundaries, backup, and recovery |
-| [API reference](docs/api.md) | Sessions, directory context, door operations, and errors |
+| [OpenTYG backend API](docs/api.md) | This application's sessions, directory context, door operations, and errors |
+| [TYG SDK and platform APIs](https://github.com/zjmdong/OpenTYG/tree/opentyg-sdk) | Standalone SDK, platform protocols, and development |
+| [Disclaimer](DISCLAIMER.md) | Unofficial status, responsible use, and authorization boundaries |
 
 ## Security and operational boundaries
 

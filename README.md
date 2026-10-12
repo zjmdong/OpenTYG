@@ -12,7 +12,9 @@
 
 OpenTYG 是一个可自行部署的移动端网页应用，支持通过已有桃园谷账号登录、选择房产、管理常用门禁和远程开门。前端与后端由一个 Node.js 服务提供，通过 Docker 即可部署，无需前端构建或额外数据库。
 
-本项目为独立实现，与桃园谷官方没有隶属关系。使用前需要已有账号及有效门禁权限；应用不会授予或绕过平台权限。当前应用界面为简体中文，项目文档提供中英双语。
+**本应用与桃园谷官方及其关联方无任何隶属、合作或授权关系，未获得官方认可，也不由官方提供技术支持。** 使用前需要已有账号及有效门禁权限；应用不会授予或绕过平台权限。请负责任地使用，仅操作本人或已获明确授权的账号和设备，并遵守适用法律、平台规则和物业规定。用户的使用行为及其后果由用户自行承担，与项目作者无关；在适用法律允许的范围内，作者及贡献者不承担因使用或滥用本项目产生的责任。详见 [免责声明](DISCLAIMER.md)。
+
+当前应用界面为简体中文，项目文档提供中英双语。
 
 ## 功能
 
@@ -22,6 +24,38 @@ OpenTYG 是一个可自行部署的移动端网页应用，支持通过已有桃
 - **连接准备**：登录后及回到前台时提前准备门禁连接，发送开门指令前检查目录和权限。
 - **私有存储**：服务端加密保存记住的登录状态和用户偏好，浏览器不接收上游登录令牌或开门凭据。
 - **简单部署**：单容器、单端口、无 npm 运行时依赖；附带健康检查和 HTTPS 反向代理示例。
+
+## 界面预览
+
+以下截图使用隔离的离线演示服务生成，账号、房产和门禁名称均为虚构数据，不涉及真实住户或设备。截图展示现有界面，演示服务不包含在生产部署中。
+
+<table>
+  <tr>
+    <td align="center"><strong>登录与手机安装</strong><br><img src="docs/screenshots/login.png" width="240" alt="短信登录和 PWA 安装入口"></td>
+    <td align="center"><strong>首页收藏</strong><br><img src="docs/screenshots/home.png" width="240" alt="首页常用门禁圆形按钮"></td>
+    <td align="center"><strong>全部门禁</strong><br><img src="docs/screenshots/doors.png" width="240" alt="全部门禁与编辑顺序入口"></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>设置与房产</strong><br><img src="docs/screenshots/settings.png" width="240" alt="深色主题、演示账号和房产选择"></td>
+    <td align="center"><strong>名称与收藏位次</strong><br><img src="docs/screenshots/door-settings.png" width="240" alt="门禁重命名和首页收藏位次设置"></td>
+    <td align="center">浅色 / 深色主题<br>手机浏览器 / PWA</td>
+  </tr>
+</table>
+
+## 底层：TYG SDK
+
+OpenTYG 的平台通信由 **TYG Core SDK（`TygClient`）** 实现。SDK 封装桃园谷平台的服务配置、图形验证码、短信与密码登录、房产权查询、门禁鉴权，以及 WebSocket 门目录下载和开门消息。OpenTYG 在这一层之上提供网页界面、账号会话管理、认证限流、加密存储和用户偏好。
+
+```mermaid
+flowchart LR
+    UI[手机浏览器 / PWA] --> Backend[OpenTYG 后端]
+    Backend --> SDK[TYG Core SDK / TygClient]
+    SDK -->|HTTP + WebSocket| Platform[桃园谷平台]
+```
+
+TYG Core SDK 是本项目的**非官方协议适配实现**，不是桃园谷官方提供或维护的 SDK。网页应用在 `server/vendor/tyg-core-sdk/` 内嵌了用于服务端部署的适配版本，包含主机限制、稳定门禁标识和凭据处理等调整；它与独立 SDK 的源码版本不完全相同。网页应用目前提供门禁功能，没有开放独立 SDK 中的对讲功能。
+
+如果你希望开发自己的客户端，可查看独立的 [opentyg-sdk 分支](https://github.com/zjmdong/OpenTYG/tree/opentyg-sdk)，以及其中的 [桃园谷平台接口参考](https://github.com/zjmdong/OpenTYG/blob/opentyg-sdk/docs/platform-api.md)。该文档描述平台 HTTP、WebSocket、XML 和 SIP/RTP 协议；本文档目录中的 `docs/api.md` 描述的是 OpenTYG 自己的后端接口。
 
 ## 快速开始
 
@@ -65,7 +99,9 @@ curl -fsS http://127.0.0.1:8080/api/health
 | [配置参考](docs/configuration.md) | 环境变量、运行用户、上游地址与本机开发 |
 | [架构说明](docs/architecture.md) | 浏览器、后端、平台服务和数据存储 |
 | [隐私与运维](docs/security.md) | 凭据生命周期、加密边界、备份与恢复 |
-| [API 参考](docs/api.md) | 会话、目录、门禁操作和错误处理 |
+| [OpenTYG 后端 API](docs/api.md) | 本应用的会话、目录、门禁操作和错误处理 |
+| [TYG SDK 与平台接口](https://github.com/zjmdong/OpenTYG/tree/opentyg-sdk) | 独立 SDK、平台通信协议和二次开发 |
+| [免责声明](DISCLAIMER.md) | 非官方项目声明、使用责任与授权边界 |
 
 ## 安全与使用边界
 
