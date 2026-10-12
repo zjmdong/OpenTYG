@@ -74,12 +74,15 @@ jobs:
           test "$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Source}}{{end}}{{end}}' opentyg)" = "$data_dir"
           test "$(stat -c %a "$secret_file")" = 600
           secret_hash=$(sha256sum "$secret_file")
-          data_key_hash=$(sha256sum "$data_dir/.app-secret")
+          # The data key is rewrapped with a fresh IV at startup; verify the
+          # decrypted key rather than comparing ciphertext files.
+          data_key_probe='import {readFileSync} from "node:fs"; import {createHash} from "node:crypto"; import {unseal} from "./server/persistence.mjs"; const s=readFileSync("/run/secrets/opentyg_secret","utf8").trim(); const w=createHash("sha256").update(`opentyg:key-wrap:v1:${s}`).digest(); const k=unseal(w,JSON.parse(readFileSync("/data/.app-secret","utf8")),"opentyg:data-key:v1").key; process.stdout.write(createHash("sha256").update(k).digest("hex"));'
+          data_key_hash=$(docker exec opentyg node --input-type=module -e "$data_key_probe")
           printf '%s\n' "$install_dir" 1 | sudo bash install.sh --lang=en
           test "$(sha256sum "$secret_file")" = "$secret_hash"
           printf '%s\n' "$install_dir" 2 "$data_dir" '' 'https://opentyg.example.com:8443' 1 8089 '' '' '' | sudo bash install.sh --lang=en
           test "$(sha256sum "$secret_file")" = "$secret_hash"
-          test "$(sha256sum "$data_dir/.app-secret")" = "$data_key_hash"
+          test "$(docker exec opentyg node --input-type=module -e "$data_key_probe")" = "$data_key_hash"
           compgen -G "$install_dir/docker-compose.yml.*.bak" >/dev/null
           curl -fsS http://127.0.0.1:8089/api/health
           curl -fsS -H 'Host: opentyg.example.com:8443' http://127.0.0.1:8089/ > "$RUNNER_TEMP/installer-page.html"

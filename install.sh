@@ -69,11 +69,13 @@ valid_origin() {
   done
 }
 valid_ip() {
-  local octet
+  local octet first second
   local -a octets
   [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ && "$1" != 0.0.0.0 ]] || return 1
   IFS=. read -r -a octets <<< "$1"
   for octet in "${octets[@]}"; do [[ ${#octet} -le 3 ]] && ((10#$octet <= 255)) || return 1; done
+  first=$((10#${octets[0]})); second=$((10#${octets[1]}))
+  ((first == 10 || (first == 172 && second >= 16 && second <= 31) || (first == 192 && second == 168) || (first == 100 && second >= 64 && second <= 127)))
 }
 start_service() {
   local -a compose=("${DOCKER[@]}" compose --project-directory "$INSTALL_DIR" -f "$CONFIG")
