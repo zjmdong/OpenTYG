@@ -82,7 +82,7 @@ start_service() {
   "${compose[@]}" pull opentyg
   "${compose[@]}" up -d opentyg
   local attempt
-  for attempt in {1..20}; do
+  for ((attempt=0; attempt<20; attempt++)); do
     if "${compose[@]}" exec -T opentyg node deploy/healthcheck.mjs >/dev/null 2>&1; then
       msg '服务已启动，健康检查通过。' 'The app is running and its health check passed.'
       printf '\n%s\n' "$CONFIG"
@@ -150,9 +150,9 @@ ask PROXY_MODE '请选择' 'Choose' 1
 case "$PROXY_MODE" in
   1) BIND_IP=127.0.0.1 ;;
   2) while :; do
-       ask BIND_IP '此 Docker 主机的内网 IPv4 地址' 'This Docker host’s LAN IPv4 address' ''
+       ask BIND_IP '此 Docker 主机的内网 IPv4 地址' 'LAN IPv4 address of this Docker host' ''
        valid_ip "$BIND_IP" && break
-       msg '请填写本机实际内网 IPv4 地址。' 'Enter this host’s actual LAN IPv4 address.'
+       msg '请填写本机实际内网 IPv4 地址。' 'Enter the actual LAN IPv4 address of this host.'
      done ;;
   *) die '请输入 1 或 2。' 'Enter 1 or 2.' ;;
 esac
