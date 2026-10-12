@@ -73,7 +73,7 @@ valid_ip() {
   local -a octets
   [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ && "$1" != 0.0.0.0 ]] || return 1
   IFS=. read -r -a octets <<< "$1"
-  for octet in "${octets[@]}"; do [[ ${#octet} -le 3 ]] && ((10#$octet <= 255)) || return 1; done
+  for octet in "${octets[@]}"; do [[ "$octet" =~ ^(0|[1-9][0-9]{0,2})$ ]] && ((10#$octet <= 255)) || return 1; done
   first=$((10#${octets[0]})); second=$((10#${octets[1]}))
   ((first == 10 || (first == 172 && second >= 16 && second <= 31) || (first == 192 && second == 168) || (first == 100 && second >= 64 && second <= 127)))
 }
@@ -111,7 +111,12 @@ CONFIG="$INSTALL_DIR/docker-compose.yml"
 [[ ! -L "$CONFIG" ]] || die '配置文件不能是符号链接。' 'The configuration file must not be a symlink.'
 if [[ -e "$CONFIG" ]]; then
   msg '发现已有配置。1：保留配置并启动；2：重新填写（原配置会备份）。' 'Existing configuration found. 1: keep it and start; 2: reconfigure (a backup is kept).'
-  ask MODE '请选择' 'Choose' 1
+  default_mode=1
+  if ! "${DOCKER[@]}" compose --project-directory "$INSTALL_DIR" -f "$CONFIG" config --quiet >/dev/null 2>&1; then
+    msg '现有配置尚未完成，建议重新填写。' 'Existing configuration is incomplete; reconfiguration is recommended.'
+    default_mode=2
+  fi
+  ask MODE '请选择' 'Choose' "$default_mode"
   case "$MODE" in
     1) start_service; msg '请使用原 HTTPS 地址访问；反向代理设置保持原样。' 'Use your existing HTTPS address and reverse proxy settings.'; exit 0 ;;
     2) ;;

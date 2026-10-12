@@ -6,7 +6,7 @@
 
 ## 1. 准备
 
-在设备上安装并启动 **Docker 和 Docker Compose 插件**，准备好自己的 HTTPS 域名与证书。在设备终端或 SSH 中执行下面命令。
+在设备上安装并启动 **Docker 和 Docker Compose 插件**，需有 curl 和 OpenSSL，并准备自己的 HTTPS 域名与证书。在设备终端或 SSH 中执行下面命令。
 
 ## 2. 运行安装向导
 

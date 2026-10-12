@@ -6,7 +6,7 @@ For Linux servers and NAS devices. Supports amd64 / arm64; no source download is
 
 ## 1. Prepare
 
-Install and start **Docker and the Docker Compose plugin**. Prepare your HTTPS domain and certificate. Run the following command in the device's terminal or SSH session.
+Install and start **Docker and the Docker Compose plugin**, with curl and OpenSSL available. Prepare your HTTPS domain and certificate. Run the following command in the device's terminal or SSH session.
 
 ## 2. Run the installer
 
