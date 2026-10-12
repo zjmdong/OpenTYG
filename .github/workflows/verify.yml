@@ -32,7 +32,7 @@ jobs:
           sudo chown -R 10001:10001 "$check_dir"
           sudo chmod 700 "$check_dir/data" "$check_dir/secrets"
           sudo chmod 600 "$check_dir/secrets/app-secret.txt"
-          trap 'docker rm -f opentyg-verify >/dev/null 2>&1 || true' EXIT
+          trap 'if [[ $? -ne 0 ]]; then docker logs opentyg-verify; fi; docker rm -f opentyg-verify >/dev/null 2>&1 || true' EXIT
           docker run -d --name opentyg-verify --read-only --cap-drop ALL --security-opt no-new-privileges \
             -p 127.0.0.1:8787:8787 \
             -e PUBLIC_ORIGIN=https://opentyg.example.com -e COOKIE_SECURE=1 \
@@ -40,5 +40,5 @@ jobs:
             -v "$check_dir/data:/data" \
             -v "$check_dir/secrets/app-secret.txt:/run/secrets/opentyg_secret:ro" \
             opentyg:verify
-          curl --retry 10 --retry-delay 1 --retry-connrefused -fsS http://127.0.0.1:8787/api/health
+          curl --retry 10 --retry-delay 1 --retry-all-errors --retry-max-time 30 --connect-timeout 3 --max-time 5 -fsS http://127.0.0.1:8787/api/health
           docker exec opentyg-verify node deploy/healthcheck.mjs
