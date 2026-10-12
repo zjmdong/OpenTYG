@@ -98,7 +98,8 @@ jobs:
             -v "$check_dir/data:/data" -v "$check_dir/secrets/app-secret.txt:/run/secrets/opentyg_secret:ro" "$image"
           curl --retry 10 --retry-delay 1 --retry-all-errors --retry-max-time 30 --connect-timeout 3 --max-time 5 -fsS http://127.0.0.1:8787/api/health
           docker exec opentyg-image-check node deploy/healthcheck.mjs
-          curl -fsS http://127.0.0.1:8787/ > "$RUNNER_TEMP/opentyg-page.html"
+          test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:8787/)" = 403
+          curl -fsS -H 'Host: opentyg.example.com' http://127.0.0.1:8787/ > "$RUNNER_TEMP/opentyg-page.html"
           grep -q 'OpenTYG' "$RUNNER_TEMP/opentyg-page.html"
           echo "Verified linux/$ARCH: UID 10001, readonly root, mounted secret, persistent data, health endpoint, and home page." >> "$GITHUB_STEP_SUMMARY"
       - name: Log in to GitHub Container Registry
