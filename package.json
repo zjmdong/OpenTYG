@@ -1,0 +1,19 @@
+{
+  "name": "opentyg",
+  "version": "1.2.1",
+  "private": true,
+  "description": "A self-hosted, mobile-first web client for authorized Taoyuangu door access.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zjmdong/OpenTYG.git"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node server/index.mjs"
+  },
+  "dependencies": {}
+}

@@ -1,0 +1,1257 @@
+/* ==========================================================================
+   OpenTYG 移动端开门 — 全部样式
+   设计基准：docs/api.md
+   配色原则：1 个主色 + 1 套中性色阶 + 2 个语义色（成功 / 失败），其余一律中性。
+   零依赖、零构建、原生 CSS
+
+   ── 主题机制（与 web/js/theme.js、index.html 首屏脚本的契约）────────────
+   · 无 data-theme（auto）→ 跟随系统 prefers-color-scheme
+   · html[data-theme="light"] / html[data-theme="dark"] → 手动指定
+   · 令牌只在 :root 声明一次，深色只覆盖「同一批名字」。
+     旧变量名（--blue-1 / --navy / --white / --warn …）是别名，var() 在计算期
+     解析，因此会自动跟随主题，不必在深色块里重复声明。
+   · color-scheme 必须声明：这是阻止手机浏览器「强制深色」自动反色的关键。
+   · --chrome 必须与 index.html 的 theme-color 元信息、theme.js 第 33 行的常量
+     三处保持一致，否则地址栏与页面顶部会出现色差。
+   ========================================================================== */
+
+/* ---------------------------------------------------------------- 设计变量 */
+:root {
+  color-scheme: light dark;
+
+  /* ── 主色：全站唯一彩色（1 主色 + 前景档）── */
+  --accent:        #2F6BED;                  /* 实底：主按钮 / 大色块；与 favicon 同色
+                                                白字 4.7:1，深底 3.8:1，两套主题共用 */
+  --accent-fg:     #2A5FD6;                  /* 作为文字 / 图标 / 描边：白底 5.7:1，主色淡底 4.7:1 */
+  --accent-soft:   rgba(47, 107, 237, .12);  /* 主色淡底 */
+  --accent-line:   rgba(47, 107, 237, .22);  /* 主色细描边 */
+
+  /* ── 门禁圆钮（首页主视觉）：浅色=深蓝实底，深色=中性表面，避免大面积高饱和色 ── */
+  --orb:      #1B4FC7;                       /* 圆钮底色（白锁 + 白字 7.0:1） */
+  --orb-line: var(--on-accent-line);         /* 圆钮 1px 内描边，深色下靠它勾勒边界 */
+
+  /* ── 中性色阶（一套，去蓝味）── */
+  --ink:   #16181D;
+  --ink-2: #5A6270;
+  --ink-3: #6E7581;
+  /* 占位符/禁用态。必须 ≥4.5:1：#FFFFFF 上实测 4.64:1（原先 #949BA6 只有 2.7:1）。
+     该档位只用于 placeholder 与禁用控件，不承载正文，因此不再单独留更浅的一档。 */
+  --ink-4: #6E7581;
+
+  /* ── 背景 / 表面（深色下靠「明度分层」而不是阴影分层）── */
+  --bg:        #E6E9EE;   /* 手机外壳以外的兜底背景（仅桌面端可见） */
+  --chrome:    #EEF0F4;   /* #app 顶部条；与 theme-color 对齐，必须比 --surface 深一档 */
+  --surface:   #FFFFFF;   /* 内容卡 / 顶栏 / 页签栏 */
+  --surface-2: #FFFFFF;   /* 抬升面：抽屉 / 弹窗 / 输入框 / 面板 */
+  --raise:     #FFFFFF;   /* 比所在底色更亮的药丸（分段选择器选中项） */
+  --field:     #F1F3F7;   /* 输入框 / 芯片 / 次要按钮底 */
+  --field-2:   #E7EBF2;   /* 按下 / 聚焦时更深一档 */
+  --line:      #E9EBF0;   /* 分隔线 */
+  --line-2:    #C8CED8;   /* 控件描边（输入框 / 单选 / 图标底 / 上下边界） */
+
+  /* ── 语义色：只保留「成功 / 失败」（开门结果弹窗）── */
+  --ok:     #0B7A42;
+  --ok-bg:  #E7F5EC;
+  --err:    #C0272D;
+  --err-bg: #FDECEC;
+
+  /* ── 遮罩 / 提示条 ── */
+  --scrim:    rgba(10, 14, 24, .42);
+  --toast-bg: rgba(20, 24, 38, .94);
+
+  /* ── 深色实底上的白色前景（两套主题共用）── */
+  --on-accent:      #FFFFFF;
+  --on-accent-soft: rgba(255, 255, 255, .16);
+  --on-accent-line: rgba(255, 255, 255, .22);
+  --toast-fg:       #FFFFFF;
+  /* 冷却进度环压在圆钮边缘上，所以用白色系，两套主题都看得清 */
+  --ring-track:     var(--on-accent-line);
+  --ring-bar:       var(--on-accent);
+
+  /* ── 阴影：整套只用一个中性色（--shade），只改透明度就能换主题 ── */
+  --shade:          rgba(16, 20, 32, .10);
+  --shadow-card:    0 1px 2px var(--shade), 0 8px 22px var(--shade);
+  --shadow-screen:  0 -1px 0 var(--line-2), 0 -12px 30px var(--shade);
+  --shadow-orb:     0 8px 20px var(--shade);
+  --shadow-btn:     0 6px 16px var(--shade);
+  --shadow-pop:     0 20px 50px var(--shade);
+  --shadow-sheet:   0 -12px 40px var(--shade);
+  --shadow-drag:    0 16px 36px var(--shade);
+  --shadow-app:     0 26px 64px var(--shade);
+
+  --r-shell: 28px;   /* 手机外壳内容卡顶角（比 --r-lg 更大一档） */
+  --r-lg: 22px;
+  --r-cell: 20px;    /* 门禁网格头像底 */
+  --r-control: 12px; /* 按钮 / 输入框 */
+  --r-md: 14px;
+  --r-sm: 10px;
+  --r-pill: 999px;
+  --safe-b: env(safe-area-inset-bottom, 0px);
+
+  --font: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei",
+          "Helvetica Neue", Helvetica, Arial, sans-serif;
+
+  /* ── 兼容别名：旧变量名保留并指向新令牌，删掉会让历史规则失效 ── */
+  --blue-1:    var(--accent-fg);
+  --blue-2:    var(--accent);
+  --blue:      var(--accent);
+  --blue-soft: var(--accent-soft);
+  --blue-line: var(--accent-line);
+  --navy:      var(--orb);
+  --navy-2:    var(--orb);
+  --navy-3:    var(--orb);
+  --white:     var(--surface);
+  --warn:      var(--ink-2);   /* 不再引入第三种彩色 */
+  --warn-bg:   var(--field);
+}
+
+/* ── 深色令牌：无 data-theme（auto）时跟随系统 ── */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --orb:      #333A45;                       /* 中性表面：亮一档，靠描边分层，不像亮蓝那样跳 */
+    --orb-line: rgba(255, 255, 255, .32);
+    --accent-fg:     #6FA3FB;                  /* 作为文字（深底 7.0:1） */
+    --accent-soft:   rgba(111, 163, 251, .18);
+    --accent-line:   rgba(111, 163, 251, .36);
+
+    --ink:   #F2F4F8;
+    --ink-2: #A8B0BF;
+    --ink-3: #8A93A3;
+    /* 占位符/禁用态：--surface-2(#1C2028) 上实测 4.97:1（原先 #7C8494 只有 4.34:1） */
+    --ink-4: #868EA0;
+
+    --bg:        #05070A;
+    --chrome:    #0E1016;                      /* 比 --surface 更深：顶部条与内容卡分层 */
+    --surface:   #16181F;
+    --surface-2: #1C2028;                      /* 抬升面：比内容卡亮一档 */
+    --raise:     #333A45;                      /* 比 --field 亮一档 */
+    --field:     #23272F;
+    --field-2:   #2A2F38;
+    --line:      #262B34;
+    --line-2:    #3A414D;
+
+    --ok:     #4ADE80;
+    --ok-bg:  #132A1D;
+    --err:    #FF7B7F;
+    --err-bg: #2C1618;
+
+    --scrim:    rgba(0, 0, 0, .62);
+    --toast-bg: rgba(48, 54, 68, .96);
+
+    --shade: rgba(0, 0, 0, .5);
+  }
+}
+
+/* ── 手动指定浅色：令牌用 :root 默认值，只需纠正 color-scheme ── */
+html[data-theme="light"] { color-scheme: light; }
+
+/* ── 手动指定深色：与上面的 @media 块保持同一批值（改一处请改两处）── */
+html[data-theme="dark"] {
+  color-scheme: dark;
+
+  --orb:      #333A45;
+  --orb-line: rgba(255, 255, 255, .32);
+  --accent-fg:     #6FA3FB;
+  --accent-soft:   rgba(111, 163, 251, .18);
+  --accent-line:   rgba(111, 163, 251, .36);
+
+  --ink:   #F2F4F8;
+  --ink-2: #A8B0BF;
+  --ink-3: #8A93A3;
+  /* 占位符/禁用态：与上面的 @media 块保持同值（改一处请改两处）4.97:1 */
+  --ink-4: #868EA0;
+
+  --bg:        #05070A;
+  --chrome:    #0E1016;
+  --surface:   #16181F;
+  --surface-2: #1C2028;
+  --raise:     #333A45;
+  --field:     #23272F;
+  --field-2:   #2A2F38;
+  --line:      #262B34;
+  --line-2:    #3A414D;
+
+  --ok:     #4ADE80;
+  --ok-bg:  #132A1D;
+  --err:    #FF7B7F;
+  --err-bg: #2C1618;
+
+  --scrim:    rgba(0, 0, 0, .62);
+  --toast-bg: rgba(48, 54, 68, .96);
+
+  --shade: rgba(0, 0, 0, .5);
+}
+
+/* -------------------------------------------------------------------- 基础 */
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+button, input, textarea, select { font-family: inherit; font-size: inherit; color: inherit; }
+button { -webkit-tap-highlight-color: transparent; }
+h1, h2, h3, h4, p { margin: 0; }
+svg { display: block; }
+
+.is-hidden { display: none !important; }
+
+.noscript {
+  position: fixed; inset: 0; display: grid; place-items: center;
+  padding: 24px; background: var(--surface); color: var(--ink); z-index: 999; text-align: center;
+}
+
+/* 滚动条（桌面端）细一点 */
+.page-body::-webkit-scrollbar, .sheet::-webkit-scrollbar { width: 6px; }
+.page-body::-webkit-scrollbar-thumb, .sheet::-webkit-scrollbar-thumb {
+  background: var(--line-2); border-radius: 3px;
+}
+
+/* ------------------------------------------------------------ 手机外壳布局 */
+#app {
+  position: relative;
+  width: 100%;
+  max-width: 430px;
+  height: 100vh;
+  height: 100dvh;
+  margin: 0 auto;
+  /* 从屏幕最顶端开始铺满，不留空白条；直角，不做手机外壳圆角 */
+  padding-top: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--chrome);
+}
+
+/* （顶部蓝色条上的装饰圆点已按需求移除） */
+
+.screen {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.view {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 桌面端：整机居中 + 四角圆润；移动端不加任何顶部留白 */
+/* 桌面端：整机居中显示；直角、填满可用高度，不做手机外壳圆角与留白 */
+@media (min-width: 520px) {
+  body { display: flex; align-items: center; justify-content: center; }
+  #app {
+    height: 100dvh;
+    box-shadow: none;
+  }
+}
+
+/* -------------------------------------------------------------------- 页面 */
+.page {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  animation: page-in .22s ease both;
+}
+@keyframes page-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.page-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+.page-head {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  min-height: 54px;
+  padding: 4px 8px;
+  background: var(--surface);
+  z-index: 3;
+}
+
+.page-head__title {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  max-width: 58%;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: .2px;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+.page-head__left, .page-head__actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  z-index: 1;
+}
+
+.icon-btn {
+  width: 38px; height: 38px;
+  display: grid; place-items: center;
+  border: 0; border-radius: var(--r-control);
+  background: transparent;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: background .15s ease, transform .12s ease;
+}
+.icon-btn svg { width: 22px; height: 22px; }
+.icon-btn:active { transform: scale(.94); background: var(--field); }
+.icon-btn[disabled] { opacity: .4; pointer-events: none; }
+
+/* 右上角文字按钮（编辑顺序 / 完成） */
+.text-btn {
+  border: 0; background: transparent;
+  color: var(--accent-fg);
+  font-size: 14px; font-weight: 600;
+  padding: 8px 10px; border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: background .15s ease;
+}
+.text-btn:active { background: var(--accent-soft); }
+.text-btn[disabled] { opacity: .45; pointer-events: none; }
+.text-btn--dirty { box-shadow: inset 0 0 0 1.5px var(--accent-line); }
+
+/* ------------------------------------------------------------------ 搜索框 */
+.search {
+  position: relative;
+  flex: 0 0 auto;
+  margin: 2px 14px 8px;
+}
+.search__input {
+  width: 100%; height: 38px;
+  border: 0; border-radius: var(--r-sm);
+  background: var(--field);
+  padding: 0 34px 0 34px;
+  font-size: 13px;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.search__input::placeholder { color: var(--ink-4); }
+.search__input:focus { background: var(--field-2); }
+.search__icon {
+  position: absolute; left: 10px; top: 50%;
+  transform: translateY(-50%);
+  color: var(--ink-4);
+  pointer-events: none;
+}
+.search__icon svg { width: 17px; height: 17px; }
+.search__clear {
+  position: absolute; right: 6px; top: 50%;
+  transform: translateY(-50%);
+  width: 26px; height: 26px;
+  display: grid; place-items: center;
+  border: 0; border-radius: 50%;
+  background: transparent; color: var(--ink-4);
+  cursor: pointer;
+}
+.search__clear svg { width: 14px; height: 14px; }
+
+/* --------------------------------------------------------- 首页：门禁按钮 */
+.door-list { display: flex; flex-direction: column; }
+
+.door-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 18px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.door-card:last-child { border-bottom: 0; }
+
+.door-orb {
+  position: relative;
+  -webkit-touch-callout: none;
+  width: 104px; height: 104px;
+  border: 0; border-radius: 50%;
+  background: var(--orb);
+  color: var(--on-accent);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 3px;
+  cursor: pointer;
+  /* 深色下阴影几乎不可见，靠 1px 内描边区分圆钮与背景 */
+  box-shadow: var(--shadow-orb), inset 0 0 0 1px var(--orb-line);
+  transition: transform .16s ease, box-shadow .16s ease, opacity .2s ease;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.door-orb:active { transform: scale(.955); }
+.door-orb__icon svg { width: 30px; height: 30px; }
+.door-orb__state { font-size: 11px; letter-spacing: .3px; opacity: .92; }
+
+/* 锁孔：icons.js 用 class 指定而不写死颜色，必须跟着圆钮颜色变（否则深色下是一个黑洞） */
+.lock-hole { fill: var(--orb); }
+
+/* 开门中：旋转态 */
+.door-orb.is-opening { cursor: progress; }
+.door-orb.is-opening:active { transform: none; }
+.door-orb.is-opening .door-orb__icon { display: none; }
+.spinner {
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  border: 2.5px solid var(--on-accent-line);
+  border-top-color: var(--on-accent);
+  animation: spin .7s linear infinite;
+}
+.door-orb .spinner { position: absolute; top: 50%; left: 50%; margin: -13px 0 0 -13px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* 冷却中：进度环绕圆钮一圈（SVG + rAF，逐帧平滑推进） */
+.door-orb.is-cooldown { opacity: .72; }
+.door-orb.is-cooldown:active { transform: none; }
+.door-orb__ring {
+  position: absolute; inset: -6px;
+  width: calc(100% + 12px); height: calc(100% + 12px);
+  display: none;
+  pointer-events: none;
+  /* 从正上方开始顺时针推进 */
+  transform: rotate(-90deg);
+}
+.door-orb.is-cooldown .door-orb__ring { display: block; }
+.door-orb__ring circle { fill: none; stroke-width: 3.5; }
+.door-orb__ring-track { stroke: var(--ring-track); }
+.door-orb__ring-bar {
+  stroke: var(--ring-bar);
+  stroke-linecap: round;
+  transition: stroke .2s ease;
+}
+
+.door-card__name {
+  margin-top: 12px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink);
+  text-align: center;
+  word-break: break-word;
+}
+.door-card__hint {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--ink-3);
+  text-align: center;
+}
+
+/* ------------------------------------------------------- 全部门禁：3 列网格 */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px 4px;
+  padding: 8px 8px 26px;
+}
+
+/* 门禁格子：不做卡片容器（无边框、无底色、无圆角），只保留图标与名称 */
+.door-cell {
+  position: relative;
+  -webkit-touch-callout: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 2px 6px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  transition: opacity .15s ease;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.door-cell:active { opacity: .6; }
+
+.door-cell__avatar {
+  position: relative;
+  width: 64px; height: 64px;
+  display: grid; place-items: center;
+  color: var(--ink-2);
+  background: transparent;
+  transition: transform .16s ease;
+}
+.door-cell__avatar svg { width: 28px; height: 28px; }
+
+.door-cell__name {
+  font-size: 12px;
+  line-height: 1.25;
+  color: var(--ink);
+  text-align: center;
+  max-width: 100%;
+  word-break: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* 已收藏：只有一颗星，不显示位次数字 */
+.door-cell__star {
+  position: absolute;
+  top: -5px; right: -5px;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--on-accent);
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 2px solid var(--white);
+  box-shadow: var(--shadow-btn);
+}
+.door-cell__star svg { width: 11px; height: 11px; }
+
+/* 门的开关状态点 */
+.door-cell.is-opening .door-cell__avatar svg { opacity: 0; }
+.door-cell.is-opening .door-cell__avatar::after {
+  content: "";
+  position: absolute;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  border: 2.5px solid var(--accent-soft);
+  border-top-color: var(--accent-fg);
+  animation: spin .7s linear infinite;
+}
+
+/* 冷却中：图标**完全不显示**（不是变灰、不是半透明），图标位自带一层与页面底色
+   明显区分的底色，只留居中的倒计时数字；数字用 --ink，两套主题都 ≥ 4.5:1。
+   注意：不再给 .door-cell 加 opacity，否则底色会被稀释、对比度不可控。 */
+.door-cell.is-cooldown { cursor: default; }
+.door-cell.is-cooldown .door-cell__avatar {
+  background: var(--field-2);
+  border-radius: var(--r-cell);
+}
+.door-cell.is-cooldown .door-cell__avatar > svg {
+  /* 直接不渲染，杜绝「倒计时压在半透明图标上」的重叠 */
+  display: none;
+}
+.door-cell__cd {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  animation: cd-in .16s ease-out;
+}
+@keyframes cd-in { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: scale(1); } }
+
+/* 拖动排序模式：只保留一条边框，且边框贴合按钮自身的圆角（--r-cell）。
+   右上角「四个点」角标已按需求移除；原来那圈 box-shadow 是给 64px 方角图标位描边，
+   看起来就是「直角边框」，现在改成真边框 + 同档圆角。
+   边框加在图标位上而不是整个格子上：网格列间距只有 4px，加在格子上相邻边框会贴在一起。*/
+.grid.is-editing .door-cell { touch-action: none; }
+.grid.is-editing .door-cell__avatar {
+  border: 2px solid var(--accent-line);
+  border-radius: var(--r-cell);
+}
+/* 编辑模式下不显示收藏星标：排序与收藏无关，而且它压在边框外沿会被裁成半圆，
+   正是用户说的「又加边框又加角标，太乱」。此处只保留一条贴合圆角的边框。 */
+.grid.is-editing .door-cell__star { display: none; }
+.door-cell.is-dragging {
+  position: fixed;
+  margin: 0;
+  z-index: 60;
+  border-radius: var(--r-cell);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-drag);
+  transform-origin: 50% 50%;
+  transition: none;
+  opacity: .97;
+}
+.door-cell--placeholder {
+  border-radius: var(--r-cell);
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1.5px var(--accent-line);
+}
+.door-cell.is-dragging .door-cell__star { display: none; }
+.door-cell.is-dragging .door-cell__avatar {
+  border: 2px solid var(--accent-line);
+  border-radius: var(--r-cell);
+}
+.grid-hint {
+  margin: 0 16px 6px;
+  padding: 8px 12px;
+  border-radius: var(--r-sm);
+  background: var(--accent-soft);
+  color: var(--accent-fg);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* -------------------------------------------------------------- 空 / 异常态 */
+.empty {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 54px 32px 32px;
+  text-align: center;
+}
+.empty__icon {
+  width: 64px; height: 64px;
+  border-radius: var(--r-lg);
+  display: grid; place-items: center;
+  background: var(--field);
+  color: var(--ink-3);
+  margin-bottom: 14px;
+}
+.empty__icon svg { width: 30px; height: 30px; }
+.empty__title { font-size: 16px; font-weight: 700; }
+.empty__text { margin-top: 6px; font-size: 13px; color: var(--ink-3); line-height: 1.6; }
+.empty .btn { margin-top: 18px; }
+
+.state-loading {
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  padding: 60px 24px;
+  color: var(--ink-3); font-size: 13px;
+}
+.state-loading .spinner { border-color: var(--accent-line); border-top-color: var(--accent-fg); }
+
+.error-box {
+  margin: 24px 20px;
+  padding: 16px;
+  border-radius: var(--r-md);
+  background: var(--err-bg);
+  color: var(--err);
+  font-size: 13px;
+  text-align: center;
+}
+.error-box .btn { margin-top: 12px; }
+
+/* ------------------------------------------------------------ 底部页签导航 */
+.tabbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: stretch;
+  padding: 4px 4px calc(5px + var(--safe-b));
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+  z-index: 4;
+}
+.tab {
+  flex: 1 1 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 3px;
+  padding: 6px 0 4px;
+  border: 0; background: transparent;
+  color: var(--ink-3);
+  /* 11px 是可读下限（Tiny interface text 规则），不再用 10px */
+  font-size: 11px;
+  cursor: pointer;
+  transition: color .15s ease;
+}
+.tab svg { width: 22px; height: 22px; }
+.tab.is-active { color: var(--accent-fg); font-weight: 600; }
+.tab:active { opacity: .7; }
+
+/* -------------------------------------------------------------- 登录页 */
+/* 不再使用整块蓝色首屏：只保留 logo 与文字，页面保持中性底色。
+   logo 与标题**同一行**（不做「图标方块压在标题上方」的套路布局）。 */
+.login-hero {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 0 20px;
+  background: transparent;
+  color: var(--ink);
+}
+.login-hero__logo {
+  flex: 0 0 auto;
+  width: 44px; height: 44px;
+  margin: 0;
+  border-radius: var(--r-control);
+  display: grid; place-items: center;
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.login-hero__logo svg { width: 22px; height: 22px; }
+.login-hero__brand { min-width: 0; }
+.login-hero__title { font-size: 19px; font-weight: 700; letter-spacing: .2px; }
+.login-hero__sub { margin-top: 2px; font-size: 12px; color: var(--ink-3); }
+
+/* 表单 + 品牌区**整体**在页面 y 轴居中。
+   用「容器 flex 居中 + 子元素 margin:auto」组合：正常屏幕下整体居中；
+   小屏内容超出时 margin:auto 归零、容器恢复可滚动，不会把顶部内容顶出可视区。 */
+.page--login .page-body {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.login-body {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  margin: auto 0;
+  padding: 24px 20px;
+  width: 100%;
+}
+
+.tabs {
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+  /* 不再用负外边距上移：那会让标签行压进蓝色首屏里、看起来像被盖住 */
+  margin: 0 0 18px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-card);
+}
+.tab-item {
+  flex: 1 1 0;
+  height: 38px;
+  border: 0; border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink-3);
+  font-size: 14px; font-weight: 600;
+  cursor: pointer;
+  transition: background .16s ease, color .16s ease;
+}
+.tab-item.is-active { background: var(--accent-soft); color: var(--accent-fg); }
+
+.form { display: flex; flex-direction: column; gap: 14px; }
+
+.field { display: flex; flex-direction: column; gap: 7px; }
+.field__label { font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.field__row { display: flex; align-items: center; gap: 8px; }
+.field__row > .input { flex: 1 1 auto; min-width: 0; }
+.field__hint { font-size: 12px; color: var(--ink-3); line-height: 1.5; }
+
+.input {
+  width: 100%; height: 48px;
+  padding: 0 13px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-control);
+  background: var(--surface-2);
+  font-size: 16px;
+  outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.input::placeholder { color: var(--ink-4); font-size: 15px; }
+.input:focus { border-color: var(--accent-fg); box-shadow: 0 0 0 3px var(--accent-soft); }
+.input[readonly] { background: var(--field); }
+
+/* 图形验证码弹窗：点「获取验证码」后出现，图片点一下即换一张 */
+.captcha-card {
+  position: absolute;
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(360px, calc(100vw - 40px));
+  max-height: calc(100dvh - 80px);
+  overflow-y: auto;
+  padding: 20px;
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-pop, var(--shadow-card));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.captcha-card__title { font-size: 17px; font-weight: 700; color: var(--ink); }
+.captcha-card__sub { margin-top: -8px; font-size: 12px; color: var(--ink-3); }
+.captcha-card__imgbox {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 84px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--field);
+  cursor: pointer;
+  overflow: hidden;
+}
+.captcha-card__imgbox img { width: 100%; height: 100%; object-fit: contain; }
+.captcha-card__imgbox:active { background: var(--field-2, var(--field)); }
+.captcha-card__fail { font-size: 12px; color: var(--ink-3); }
+.captcha-card__error {
+  margin-top: -4px;
+  font-size: 12px;
+  color: var(--err);
+}
+.captcha-card__actions { display: flex; gap: 8px; }
+.captcha-card__actions .btn { flex: 1 1 0; }
+
+.link-btn {
+  flex: 0 0 auto;
+  border: 0; background: transparent;
+  color: var(--accent-fg);
+  font-size: 13px; font-weight: 600;
+  padding: 6px 2px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.link-btn[disabled] { color: var(--ink-4); pointer-events: none; }
+
+.check {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; color: var(--ink-2);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.check input {
+  width: 18px; height: 18px;
+  accent-color: var(--accent);
+  margin: 0;
+}
+
+.form-error {
+  padding: 9px 12px;
+  border-radius: var(--r-sm);
+  background: var(--err-bg);
+  color: var(--err);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.form-error--warn { background: var(--warn-bg); color: var(--warn); }
+
+.login-foot {
+  margin-top: 18px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+/* ------------------------------------------------------------------ 按钮 */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: 6px;
+  height: 48px;
+  padding: 0 16px;
+  border: 0; border-radius: var(--r-control);
+  font-size: 15px; font-weight: 600;
+  /* 按钮文案不换行、不被压缩：窄屏同行布局（如「获取验证码」+ 输入框）下必须保持单行 */
+  white-space: nowrap;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: transform .12s ease, opacity .16s ease, background .16s ease;
+}
+.btn:active { transform: scale(.985); }
+.btn[disabled] { opacity: .5; pointer-events: none; }
+.btn svg { width: 18px; height: 18px; flex: 0 0 auto; }
+.btn--block { width: 100%; }
+.btn--primary {
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: var(--shadow-btn);
+}
+.btn--ghost { background: var(--field); color: var(--ink-2); }
+.btn--ghost:active { background: var(--field-2); }
+.btn--danger { background: var(--err-bg); color: var(--err); }
+.btn--sm { height: 38px; font-size: 13px; border-radius: var(--r-sm); padding: 0 12px; }
+.btn--outline {
+  background: var(--surface-2);
+  color: var(--accent-fg);
+  box-shadow: inset 0 0 0 1.5px var(--accent-line);
+}
+
+/* --------------------------------------------------------------- 我的页 */
+.profile-card {
+  display: flex; align-items: center; gap: 14px;
+  margin: 4px 16px 14px;
+  padding: 18px 16px;
+  border-radius: var(--r-lg);
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: var(--shadow-btn);
+}
+.avatar {
+  flex: 0 0 auto;
+  width: 56px; height: 56px;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--on-accent-soft);
+  box-shadow: inset 0 0 0 1.5px var(--on-accent-line);
+  font-size: 22px; font-weight: 700;
+}
+.profile-card__meta { min-width: 0; }
+.profile-card__name {
+  font-size: 18px; font-weight: 700;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.profile-card__acc { margin-top: 3px; font-size: 13px; opacity: .88; }
+.profile-card__tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.tag {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--on-accent-soft);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* 卡片内的显示名：默认是按钮（点一下才进入编辑） */
+.name-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  max-width: 100%;
+  padding: 0; border: 0; background: none;
+  color: inherit; font: inherit; text-align: left;
+  cursor: pointer;
+}
+.name-btn__icon { display: inline-flex; opacity: .7; }
+.name-btn__icon svg { width: 15px; height: 15px; }
+.name-btn:active { opacity: .75; }
+
+/* 卡片内的改名输入区（宽度受卡片约束，不会撑破布局） */
+.name-edit {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  min-width: 0;
+}
+.input--inline {
+  flex: 1 1 140px; min-width: 0;
+  height: 34px; padding: 0 10px;
+  border-radius: var(--r-sm);
+  background: var(--on-accent-soft);
+  color: inherit;
+  font-size: 15px; font-weight: 600;
+}
+.input--inline::placeholder { color: currentColor; opacity: .6; }
+.name-edit .btn--sm { height: 34px; padding: 0 12px; }
+.name-edit + .field__hint { margin-top: 6px; opacity: .75; }
+
+/* 分段选择器（外观：跟随系统 / 浅色 / 深色） */
+.seg {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 4px;
+  margin: 4px 0 12px;
+  padding: 3px;
+  border-radius: var(--r-md);
+  background: var(--field);
+}
+.seg__item {
+  height: 34px;
+  border: 0; border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 13px; font-weight: 600;
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease;
+}
+/* 选中项要比轨道底色亮一档：深色下不能用纯白（--white 在深色是 --surface，比轨道还暗） */
+.seg__item.is-active { background: var(--raise); color: var(--ink); box-shadow: var(--shadow-card); }
+
+/* 可点击的设置行（进入二级页） */
+.panel--list { padding: 0 14px; }
+.row {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; min-height: 48px;
+  padding: 0; border: 0; background: none;
+  color: var(--ink); font: inherit; text-align: left;
+  cursor: pointer;
+}
+.row + .row { border-top: 1px solid var(--line); }
+.row__label { flex: 1 1 auto; font-size: 15px; }
+.row__value { font-size: 14px; color: var(--ink-3); }
+.row__chev { display: inline-flex; color: var(--ink-3); transform: rotate(180deg); }
+.row__chev svg { width: 16px; height: 16px; }
+.row:active { background: var(--field); }
+
+.panel {
+  margin: 0 16px 14px;
+  padding: 6px 14px;
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-card);
+}
+.panel__title {
+  padding: 12px 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-3);
+  letter-spacing: .6px;
+}
+.kv {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 11px 0;
+  border-top: 1px solid var(--line);
+  font-size: 14px;
+}
+.kv:first-of-type { border-top: 0; }
+.kv__k { color: var(--ink-3); flex: 0 0 auto; }
+.kv__v { color: var(--ink); font-weight: 600; text-align: right; word-break: break-all; }
+
+.hh-list { display: flex; flex-direction: column; }
+.hh {
+  display: flex; align-items: flex-start; gap: 10px;
+  width: 100%;
+  padding: 12px 0;
+  border: 0; border-top: 1px solid var(--line);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.hh:first-child { border-top: 0; }
+.hh__radio {
+  flex: 0 0 auto;
+  width: 18px; height: 18px;
+  margin-top: 1px;
+  border-radius: 50%;
+  border: 1.8px solid var(--line-2);
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.hh.is-selected .hh__radio {
+  border-color: var(--accent-fg);
+  box-shadow: inset 0 0 0 4px var(--accent-fg);
+}
+.hh__main { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.hh__name { font-size: 14px; font-weight: 600; }
+.hh__addr { font-size: 12px; color: var(--ink-3); }
+.hh__meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 3px; }
+.pill {
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  background: var(--field);
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.pill--ok { background: var(--ok-bg); color: var(--ok); }
+.pill--warn { background: var(--warn-bg); color: var(--warn); }
+.hh[disabled] { opacity: .55; cursor: not-allowed; }
+
+.page-foot { padding: 4px 16px calc(24px + var(--safe-b)); }
+
+/* ------------------------------------------------------------ 中央结果弹窗 */
+.modal-root { position: fixed; inset: 0; z-index: 80; pointer-events: none; }
+.modal {
+  position: absolute; inset: 0;
+  display: grid; place-items: center;
+  pointer-events: auto;
+}
+.modal__backdrop {
+  position: absolute; inset: 0;
+  background: var(--scrim);
+  animation: fade-in .16s ease both;
+}
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+.result-card {
+  position: relative;
+  width: min(300px, 78vw);
+  padding: 26px 22px 22px;
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  text-align: center;
+  box-shadow: var(--shadow-pop);
+  animation: pop-in .22s cubic-bezier(.2, .9, .3, 1.1) both;
+  cursor: pointer;
+}
+@keyframes pop-in {
+  from { opacity: 0; transform: scale(.9) translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+.result-card__icon {
+  width: 56px; height: 56px;
+  margin: 0 auto 14px;
+  border-radius: 50%;
+  display: grid; place-items: center;
+}
+.result-card__icon svg { width: 30px; height: 30px; }
+.result-card__icon.is-ok { background: var(--ok-bg); color: var(--ok); }
+.result-card__icon.is-err { background: var(--err-bg); color: var(--err); }
+.result-card__title { font-size: 17px; font-weight: 700; }
+.result-card__msg { margin-top: 7px; font-size: 13px; color: var(--ink-2); line-height: 1.6; word-break: break-word; }
+.result-card__tip { margin-top: 12px; font-size: 11px; color: var(--ink-3); }
+
+/* 确认弹窗 */
+.confirm-card {
+  position: relative;
+  width: min(310px, 82vw);
+  padding: 22px 20px 16px;
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-pop);
+  animation: pop-in .2s cubic-bezier(.2, .9, .3, 1.1) both;
+}
+.confirm-card__title { font-size: 16px; font-weight: 700; text-align: center; }
+.confirm-card__msg { margin-top: 8px; font-size: 13px; color: var(--ink-2); line-height: 1.6; text-align: center; word-break: break-word; }
+.confirm-card__actions { display: flex; gap: 10px; margin-top: 18px; }
+.confirm-card__actions .btn { flex: 1 1 0; height: 44px; }
+
+/* ------------------------------------------------------------------ Toast */
+.toast-root {
+  position: fixed;
+  top: calc(34px + env(safe-area-inset-top, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(360px, calc(100vw - 32px));
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  z-index: 90;
+  pointer-events: none;
+}
+.toast {
+  display: flex; align-items: center; gap: 8px;
+  max-width: 100%;
+  padding: 10px 14px;
+  border-radius: var(--r-control);
+  background: var(--toast-bg);
+  color: var(--toast-fg);
+  font-size: 13px;
+  line-height: 1.45;
+  box-shadow: var(--shadow-pop);
+  cursor: pointer;
+  pointer-events: auto;
+  opacity: 0;
+  transform: translateY(-10px);
+  transition: opacity .2s ease, transform .2s ease;
+  word-break: break-word;
+}
+.toast.is-in { opacity: 1; transform: none; }
+.toast.is-out { opacity: 0; transform: translateY(-8px); }
+.toast__icon { flex: 0 0 auto; display: grid; place-items: center; color: currentColor; }
+.toast__icon svg { width: 16px; height: 16px; }
+/* 提示条两种主题下都是深底：ok / err / warn / info 只用图标形状区分，
+   不再为它引入第 3、第 4 种彩色（原绿/红/黄/蓝四色已删）。 */
+
+/* -------------------------------------------------------------- 底部抽屉 */
+.sheet-root { position: fixed; inset: 0; z-index: 70; display: none; }
+.sheet-root.is-open { display: block; }
+.sheet__backdrop {
+  position: absolute; inset: 0;
+  background: var(--scrim);
+  animation: fade-in .18s ease both;
+}
+.sheet {
+  position: absolute;
+  left: 50%; bottom: 0;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 430px;
+  max-height: 88dvh;
+  overflow-y: auto;
+  /* 横轴不允许滚动：位次方块等元素都必须固定尺寸，不随内容变化 */
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+  -webkit-overflow-scrolling: touch;
+  padding: 10px 18px calc(20px + var(--safe-b));
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  background: var(--surface-2);
+  box-shadow: var(--shadow-sheet);
+  animation: sheet-in .26s cubic-bezier(.2, .9, .3, 1) both;
+}
+.sheet > * { max-width: 100%; }
+.sheet__body { overflow-x: hidden; }
+@keyframes sheet-in {
+  from { transform: translate(-50%, 100%); }
+  to   { transform: translate(-50%, 0); }
+}
+.sheet__grab {
+  width: 38px; height: 4px;
+  margin: 2px auto 12px;
+  border-radius: 2px;
+  background: var(--line-2);
+}
+.sheet__title {
+  font-size: 16px; font-weight: 700;
+  text-align: center;
+  word-break: break-word;
+}
+.sheet__sub {
+  margin-top: 4px;
+  font-size: 12px; color: var(--ink-3);
+  text-align: center;
+  word-break: break-word;
+}
+.sheet__section { margin-top: 16px; }
+.sheet__label {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 12px; font-weight: 700;
+  color: var(--ink-3);
+  letter-spacing: .4px;
+}
+.sheet__actions { display: flex; flex-direction: column; gap: 9px; margin-top: 16px; }
+.sheet__hint {
+  margin-top: 9px;
+  font-size: 12px;
+  color: var(--ink-3);
+  line-height: 1.55;
+  text-align: center;
+  min-height: 17px;
+}
+.sheet__close {
+  margin-top: 12px;
+}
+
+/* 位次方块：固定尺寸、编号 1–5，用颜色区分空闲 / 已占用 / 当前。
+   不随内容变长，因此设置面板不会出现横向滚动。
+   三种状态：空闲 = 中性底 + 中性描边；已占用 = 主色淡底；当前 = 主色实底。 */
+.chips {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  width: 100%;
+  max-width: 100%;
+}
+.chip {
+  /* 固定尺寸：宽度由 5 等分网格决定，高度由 aspect-ratio 锁定；
+     加入编号但保持原有方块尺寸和布局 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-2);
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-control);
+  overflow: hidden;
+  background: var(--field);
+  cursor: pointer;
+  transition: background .15s ease, box-shadow .15s ease, transform .12s ease;
+}
+.chip:active { transform: scale(.96); }
+/* 空闲 = 中性描边（空心槽位）；已占用 = 主色淡底 + 主色描边；当前 = 主色实底 */
+.chip.is-free { background: transparent; box-shadow: inset 0 0 0 1px var(--line-2); }
+.chip.is-taken { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-line); }
+.chip.is-current { background: var(--accent); box-shadow: inset 0 0 0 2px var(--accent); color: #fff; }
+
+/* ------------------------------------------------------------ 动效降级 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+  }
+}

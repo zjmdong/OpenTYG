@@ -1,0 +1,44 @@
+/* Only installation/connection UI and the isolated public offline screen. */
+.pwa-banner {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: calc(10px + env(safe-area-inset-top, 0px)) 12px 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+}
+.pwa-banner[hidden], .pwa-connection[hidden] { display: none; }
+.pwa-banner img { flex-shrink: 0; border-radius: 10px; }
+.pwa-banner__body { flex: 1; min-width: 0; }
+.pwa-banner__title { font-size: 14px; font-weight: 600; }
+.pwa-banner__text { margin: 3px 0; font-size: 12px; line-height: 1.5; color: var(--ink-2); }
+.pwa-banner__install { min-height: 44px; padding: 0 12px; }
+.pwa-banner__close { flex-shrink: 0; width: 44px; height: 44px; font-size: 24px; }
+.pwa-connection {
+  flex-shrink: 0; padding: 10px 16px;
+  background: var(--err-bg); color: var(--err); font-size: 13px; line-height: 1.5;
+}
+.pwa-offline {
+  margin: 0; min-height: 100vh; min-height: 100dvh;
+  box-sizing: border-box; display: grid; place-items: center;
+  padding: calc(24px + env(safe-area-inset-top, 0px)) 24px calc(24px + env(safe-area-inset-bottom, 0px));
+  background: #EEF0F4; color: #16181D;
+  font: 16px/1.6 system-ui, -apple-system, sans-serif;
+}
+.pwa-offline__card { width: 100%; max-width: 360px; text-align: center; }
+.pwa-offline__card img { border-radius: 18px; }
+.pwa-offline__card h1 { font-size: 24px; line-height: 1.4; }
+.pwa-offline__card p { color: #5A6270; }
+.pwa-offline__card button {
+  min-height: 48px; width: 100%; margin-top: 16px;
+  border: 0; border-radius: 12px; background: #2F6BED; color: white;
+  font: inherit; cursor: pointer;
+}
+.pwa-offline__card button:focus-visible { outline: 3px solid #16181D; outline-offset: 4px; }
+@media (prefers-color-scheme: dark) {
+  .pwa-offline { background: #0E1016; color: #F2F4F8; }
+  .pwa-offline__card p { color: #A8B0BF; }
+  .pwa-offline__card button:focus-visible { outline-color: #F2F4F8; }
+}

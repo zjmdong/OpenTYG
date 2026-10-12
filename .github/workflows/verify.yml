@@ -1,0 +1,44 @@
+name: Verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+      - name: Check source syntax
+        run: find server web deploy -type f \( -name '*.mjs' -o -name '*.js' \) -print0 | xargs -0 -n 1 node --check
+      - name: Build and check container
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build -t opentyg:verify .
+          docker run --rm --entrypoint sh opentyg:verify -c 'test "$(id -u)" = 10001 && test -r /app/server/index.mjs && test -r /app/web/index.html'
+          check_dir="$RUNNER_TEMP/opentyg-container-check"
+          mkdir -p "$check_dir/data" "$check_dir/secrets"
+          (umask 077; openssl rand -base64 32 > "$check_dir/secrets/app-secret.txt")
+          sudo chown -R 10001:10001 "$check_dir"
+          sudo chmod 700 "$check_dir/data" "$check_dir/secrets"
+          sudo chmod 600 "$check_dir/secrets/app-secret.txt"
+          trap 'docker rm -f opentyg-verify >/dev/null 2>&1 || true' EXIT
+          docker run -d --name opentyg-verify --read-only --cap-drop ALL --security-opt no-new-privileges \
+            -p 127.0.0.1:8787:8787 \
+            -e PUBLIC_ORIGIN=https://opentyg.example.com -e COOKIE_SECURE=1 \
+            -e ALLOW_INSECURE_UPSTREAM=1 -e APP_SECRET_FILE=/run/secrets/opentyg_secret \
+            -v "$check_dir/data:/data" \
+            -v "$check_dir/secrets/app-secret.txt:/run/secrets/opentyg_secret:ro" \
+            opentyg:verify
+          curl --retry 10 --retry-delay 1 --retry-connrefused -fsS http://127.0.0.1:8787/api/health
+          docker exec opentyg-verify node deploy/healthcheck.mjs

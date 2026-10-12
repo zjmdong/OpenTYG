@@ -1,0 +1,34 @@
+# Local configuration and all persistent private state.
+.env
+.env.*
+!.env.example
+data/
+secrets/
+.local-data/
+.local-secrets/
+*.blob
+*.prefs
+*.prefs.bak
+*.pem
+*.key
+*.p12
+*.pfx
+*.log
+logs/
+*.tmp
+*.bak
+# Local tools, dependencies, and unpublished development artifacts.
+node_modules/
+test/
+tests/
+tools/
+tmp/
+coverage/
+*.zip
+*.tar
+*.tar.gz
+*.apk
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
