@@ -1,9 +1,0 @@
-# Build context contains public runtime files only.
-**
-!package.json
-!server/
-!server/**
-!web/
-!web/**
-!deploy/
-!deploy/healthcheck.mjs

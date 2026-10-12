@@ -1,3 +1,0 @@
-// Exact trusted hashes for the restored original UI bootstrap and three static style attributes.
-// Changing those literals requires updating these hashes; arbitrary inline scripts/styles stay blocked.
-export const FRONTEND_CSP = "default-src 'self'; script-src 'self' 'sha256-Jli7OCMhAyBIRciOIZuX5PmJNHETBrB1Ub1MrU5BGO4='; style-src 'self' 'unsafe-hashes' 'sha256-6gMl+FLQ+cfRcw6GAiz3ZQhz0UhM6dVFVZIlRte0h34=' 'sha256-7D1rwJf1HpWHYcOvqQ39lw3AFN3onLRMNN06UEvbhqU=' 'sha256-dPYE+D6xN0Vp822PcbtM3dqwvObe4G3ywoGCcPADPcM='; img-src 'self' blob: data:; connect-src 'self'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";

@@ -1,0 +1,1355 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Taoyuangu platform HTTP API — unofficial interoperability reference",
+    "version": "0.3.4",
+    "description": "Independent reference based on the Android 1.3.8 client protocol and SDK v0.3.4. Not official developer documentation. Ten upstream JSON POST endpoints only; no OpenTYG backend routes. Use authorized accounts only. WebSocket, XML, and SIP/RTP are documented separately. Business errors may also use HTTP 200.",
+    "license": {
+      "name": "MIT (project-authored documentation only)",
+      "identifier": "MIT"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://lxj.taoyuangu.com:80",
+      "description": "Compatibility bootstrap value in the source; not a live availability guarantee. Configure allowed dynamically returned UUMS/CPS hosts per operation."
+    }
+  ],
+  "paths": {
+    "/uums/servlet/getAllConfigsServlet": {
+      "post": {
+        "operationId": "initialize",
+        "summary": "下载服务配置",
+        "tags": [
+          "服务配置"
+        ],
+        "description": "result=0 且 serverConfigs 是数组；保留当前模块需要的三类地址。\n使用原初始入口；后续 HTTP 路径是绝对路径，避免重复拼接 /uums 或 /cpsApi。",
+        "x-token-role": "prelogin",
+        "x-service-config-key": "origin",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/initializeRequest"
+              },
+              "example": {
+                "header": {
+                  "time_stamp": "20261012120000",
+                  "token": "<PRELOGIN>"
+                },
+                "body": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Platform JSON response; HTTP 200 alone does not establish business success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/initializeResponse"
+                },
+                "example": {
+                  "result": "0",
+                  "serverConfigs": [
+                    {
+                      "key": "uums_server",
+                      "value": "<RETURNED_UUMS_BASE_URL>"
+                    },
+                    {
+                      "key": "cpsApi_server",
+                      "value": "<RETURNED_CPS_BASE_URL>"
+                    },
+                    {
+                      "key": "htmlvdcs_server",
+                      "value": "<RETURNED_DOOR_BASE_URL>"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "HTTP failure or an unexpected platform response; inspect status and sanitize diagnostics."
+          }
+        }
+      }
+    },
+    "/uums/servlet/getAuthcodeServlet": {
+      "post": {
+        "operationId": "captchaSeed",
+        "summary": "获取图形挑战 seed",
+        "tags": [
+          "图形验证码"
+        ],
+        "description": "result=0，authCode 非空。\nauthCode 是图形挑战 seed，不是门禁 authcode。首次获取图片必须先执行此步骤。",
+        "x-token-role": "prelogin",
+        "x-service-config-key": "uums_server",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/captchaSeedRequest"
+              },
+              "example": {
+                "header": {
+                  "time_stamp": "20261012120000",
+                  "token": "<PRELOGIN>"
+                },
+                "body": {
+                  "phone": "<PHONE>"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Platform JSON response; HTTP 200 alone does not establish business success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/captchaSeedResponse"
+                },
+                "example": {
+                  "result": "0",
+                  "authCode": "CAPTCHA_SEED"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "HTTP failure or an unexpected platform response; inspect status and sanitize diagnostics."
+          }
+        }
+      }
+    },
+    "/uums/servlet/getAuthPicRandomServlet": {
+      "post": {
+        "operationId": "captcha",
+        "summary": "取得图形验证码图片 URL",
+        "tags": [
+          "图形验证码"
+        ],
+        "description": "result=0，picRandomUrl 非空且为 HTTP/HTTPS URL。\n获得 URL 后再 GET 图片，不能把 JSON 响应直接当图片使用。",
+        "x-token-role": "prelogin",
+        "x-service-config-key": "uums_server",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/captchaRequest"
+              },
+              "example": {
+                "header": {
+                  "time_stamp": "20261012120000",
+                  "token": "<PRELOGIN>"
+                },
+                "body": {
+                  "phone": "<PHONE>",
+                  "authCode": "<DOUBLE_MD5_CAPTCHA_AUTH>"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Platform JSON response; HTTP 200 alone does not establish business success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/captchaResponse"
+                },
+                "example": {
+                  "result": "0",
+                  "picRandomUrl": "<服务端返回的图片 URL>"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "HTTP failure or an unexpected platform response; inspect status and sanitize diagnostics."
+          }
+        }
+      }
+    },
+    "/uums/servlet/getPicRandomServlet": {
+      "post": {
+        "operationId": "captchaRefresh",
+        "summary": "刷新图形验证码",
+        "tags": [
+          "图形验证码"
+        ],
+        "description": "result=0，picRandomUrl 非空。\n此平台刷新路径只传 phone，不复用首次 authCode 摘要。",
+        "x-token-role": "prelogin",
+        "x-service-config-key": "uums_server",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/captchaRefreshRequest"
+              },
+              "example": {
+                "header": {
+                  "time_stamp": "20261012120000",
+                  "token": "<PRELOGIN>"
+                },
+                "body": {
+                  "phone": "<PHONE>"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Platform JSON response; HTTP 200 alone does not establish business success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/captchaRefreshResponse"
+                },
+                "example": {
+                  "result": "0",
+                  "picRandomUrl": "<新的图片 URL>"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "HTTP failure or an unexpected platform response; inspect status and sanitize diagnostics."
+          }
+        }
+      }
+    },
+    "/uums/servlet/getRandomCodeForSmsLogin": {
+      "post": {
+        "operationId": "sms",
+        "summary": "请求登录 / 设备验证短信",
+        "tags": [
+          "登录与短信"
+        ],
+        "description": "result=0 且 code=1。\ncode=2 图形码错误；-1 获取过于频繁；3 当日次数超限；其他状态按 reason 显示。",
+        "x-token-role": "prelogin",
+        "x-service-config-key": "uums_server",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/smsRequest"
+              },
+              "example": {
+                "header": {
+                  "time_stamp": "20261012120000",
+                  "token": "<PRELOGIN>"
+                },
+                "body": {
+                  "phone": "<PHONE>",
+                  "picRandom": "<人工填写的图形码>",
+                  "sourceClientCode": "tyg_u"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Platform JSON response; HTTP 200 alone does not establish business success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/smsResponse"
+                },
+                "example": {
+                  "result": "0",
+                  "code": "1"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "HTTP failure or an unexpected platform response; inspect status and sanitize diagnostics."
+          }
+        }
+      }
+    },
+    "/uums/servlet/smsUserLogin": {
+      "post": {
+        "operationId": "loginSms",
+        "summary": "手机号短信登录",
+        "tags": [
+          "登录与短信"
+        ],
+        "description": "result=0、code=0、token 非空；code=2 表示短信验证码错误。\n后续房产查询和远程退出使用此登录 token。\n响应可能包含 Base64 的 password 和 talkForbidStatus。独立 SDK 可在内存中保留账户密码供对讲使用；不要将完整登录响应转发到浏览器。",
+        "x-token-role": "prelogin",
+        "x-service-config-key": "uums_server",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/loginSmsRequest"
+              },
+              "example": {
+                "header": {
+                  "time_stamp": "20261012120000",
+                  "token": "<PRELOGIN>"
+                },
+                "body": {
+                  "clientCode": "tyg_u",
+                  "lastLoginOs": "4",
+                  "changeDeviceValidate": "1",
+                  "lastLoginDeviceToken": "",
+                  "deviceUniqueId": "",
+                  "mobile": "<PHONE>",
+                  "smsVerifyCode": "<收到的短信码>"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Platform JSON response; HTTP 200 alone does not establish business success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/loginSmsResponse"
+                },
+                "example": {
+                  "result": "0",
+                  "code": "0",
+                  "token": "<SESSION_TOKEN>",
+                  "userAccount": "USER_ACCOUNT",
+                  "name": "演示用户"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "HTTP failure or an unexpected platform response; inspect status and sanitize diagnostics."
+          }
+        }
+      }
+    },
+    "/uums/servlet/userLoginServlet": {
+      "post": {
+        "operationId": "loginPassword",
+        "summary": "账户密码登录",
+        "tags": [
+          "登录与短信"
+        ],
+        "description": "result=0、code=0、token 非空。\ncode=3 要求设备变更验证；获取短信并传 changeDeviceSmsCode 再登录。code=4 表示设备验证失败。\n响应可能包含 Base64 的 password 和 talkForbidStatus。独立 SDK 可在内存中保留账户密码供对讲使用；不要将完整登录响应转发到浏览器。",
+        "x-token-role": "prelogin",
+        "x-service-config-key": "uums_server",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/loginPasswordRequest"
+              },
+              "example": {
+                "header": {
+                  "time_stamp": "20261012120000",
+                  "token": "<PRELOGIN>"
+                },
+                "body": {
+                  "clientCode": "tyg_u",
+                  "lastLoginOs": "4",
+                  "changeDeviceValidate": "1",
+                  "lastLoginDeviceToken": "",
+                  "deviceUniqueId": "",
+                  "account": "<账号>",
+                  "password": "<用户输入的密码>",
+                  "changeDeviceSmsCode": ""
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Platform JSON response; HTTP 200 alone does not establish business success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/loginPasswordResponse"
+                },
+                "example": {
+                  "result": "0",
+                  "code": "0",
+                  "token": "<SESSION_TOKEN>",
+                  "userAccount": "USER_ACCOUNT",
+                  "name": "演示用户"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "HTTP failure or an unexpected platform response; inspect status and sanitize diagnostics."
+          }
+        }
+      }
+    },
+    "/cpsApi/servlet/queryOpenHouseholdList/v2": {
+      "post": {
+        "operationId": "households",
+        "summary": "查询房产开门权限",
+        "tags": [
+          "房产与鉴权"
+        ],
+        "description": "code=0 且 data.areaList 是数组；不要求 result 字段。\nSDK 兼容 area.list 为对象/数组/JSON 字符串；读取房产绑定 mobile，不用输入的账号号码替代。\n只允许 valid=1 继续开门；其他权限见数据模型 / 房产权限。",
+        "x-token-role": "sessionToken",
+        "x-service-config-key": "cpsApi_server",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/householdsRequest"
+              },
+              "example": {
+                "header": {
+                  "time_stamp": "20261012120000",
+                  "token": "<SESSIONTOKEN>"
+                },
+                "body": {
+                  "type": "1",
+                  "openCode": ""
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Platform JSON response; HTTP 200 alone does not establish business success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/householdsResponse"
+                },
+                "example": {
+                  "code": "0",
+                  "data": {
+                    "areaList": [
+                      {
+                        "areaName": "演示小区",
+                        "organizationSeq": "ORG_SEQ",
+                        "list": [
+                          {
+                            "householdSerial": "HOUSEHOLD_SERIAL",
+                            "householdAddress": "1 栋 101",
+                            "mobile": "<PHONE>",
+                            "valid": "1",
+                            "token": "<HOUSEHOLD_TOKEN>",
+                            "validEndDate": "",
+                            "packageValidEndDate": ""
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "HTTP failure or an unexpected platform response; inspect status and sanitize diagnostics."
+          }
+        }
+      }
+    },
+    "/cpsApi/openDoor/getAuthcode": {
+      "post": {
+        "operationId": "doorAuth",
+        "summary": "获取门禁 authcode",
+        "tags": [
+          "房产与鉴权"
+        ],
+        "description": "code=0 且 data.data 非空；不要求 result 字段。\nHTTP header.token 用房产 token；返回的 authcode 用于 WS 消息 header.token。两者不可互换。",
+        "x-token-role": "householdToken",
+        "x-service-config-key": "cpsApi_server",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/doorAuthRequest"
+              },
+              "example": {
+                "header": {
+                  "time_stamp": "20261012120000",
+                  "token": "<HOUSEHOLDTOKEN>"
+                },
+                "body": {
+                  "mobile": "<房产 mobile>"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Platform JSON response; HTTP 200 alone does not establish business success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/doorAuthResponse"
+                },
+                "example": {
+                  "code": "0",
+                  "data": {
+                    "data": "<DOOR_AUTHCODE>"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "HTTP failure or an unexpected platform response; inspect status and sanitize diagnostics."
+          }
+        }
+      }
+    },
+    "/uums/servlet/userLogout": {
+      "post": {
+        "operationId": "logout",
+        "summary": "原服务退出登录",
+        "tags": [
+          "会话管理"
+        ],
+        "description": "result=0；当前 SDK 不额外要求 code 字段。\n本请求用于平台退出。集成方同时应清理自己的浏览器会话、缓存和加密存储。",
+        "x-token-role": "sessionToken",
+        "x-service-config-key": "uums_server",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/logoutRequest"
+              },
+              "example": {
+                "header": {
+                  "time_stamp": "20261012120000",
+                  "token": "<SESSIONTOKEN>"
+                },
+                "body": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Platform JSON response; HTTP 200 alone does not establish business success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/logoutResponse"
+                },
+                "example": {
+                  "result": "0"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "HTTP failure or an unexpected platform response; inspect status and sanitize diagnostics."
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "initializeRequest": {
+        "type": "object",
+        "required": [
+          "header",
+          "body"
+        ],
+        "properties": {
+          "header": {
+            "type": "object",
+            "required": [
+              "time_stamp",
+              "token"
+            ],
+            "properties": {
+              "time_stamp": {
+                "type": "string",
+                "pattern": "^[0-9]{14}$",
+                "description": "yyyyMMddHHmmss, default Asia/Shanghai"
+              },
+              "token": {
+                "type": "string",
+                "minLength": 1,
+                "description": "prelogin 摘要"
+              }
+            }
+          },
+          "body": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          }
+        }
+      },
+      "initializeResponse": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "string",
+            "description": "0 为成功。"
+          },
+          "serverConfigs": {
+            "type": "array",
+            "description": "动态服务地址。",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "description": "服务键，当前使用 uums_server/cpsApi_server/htmlvdcs_server。"
+                },
+                "value": {
+                  "type": "string",
+                  "description": "服务 base URL。"
+                }
+              },
+              "required": [
+                "key",
+                "value"
+              ]
+            }
+          }
+        },
+        "description": "Fields consumed on the success path. Failure responses can omit success fields and include reason/message. result=0 且 serverConfigs 是数组；保留当前模块需要的三类地址。"
+      },
+      "captchaSeedRequest": {
+        "type": "object",
+        "required": [
+          "header",
+          "body"
+        ],
+        "properties": {
+          "header": {
+            "type": "object",
+            "required": [
+              "time_stamp",
+              "token"
+            ],
+            "properties": {
+              "time_stamp": {
+                "type": "string",
+                "pattern": "^[0-9]{14}$",
+                "description": "yyyyMMddHHmmss, default Asia/Shanghai"
+              },
+              "token": {
+                "type": "string",
+                "minLength": 1,
+                "description": "prelogin 摘要"
+              }
+            }
+          },
+          "body": {
+            "type": "object",
+            "properties": {
+              "phone": {
+                "type": "string",
+                "description": "由用户提供的已授权手机号；示例为占位值。"
+              }
+            },
+            "required": [
+              "phone"
+            ]
+          }
+        }
+      },
+      "captchaSeedResponse": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "string",
+            "description": "0 为成功。"
+          },
+          "authCode": {
+            "type": "string",
+            "description": "图形挑战 seed。"
+          }
+        },
+        "description": "Fields consumed on the success path. Failure responses can omit success fields and include reason/message. result=0，authCode 非空。"
+      },
+      "captchaRequest": {
+        "type": "object",
+        "required": [
+          "header",
+          "body"
+        ],
+        "properties": {
+          "header": {
+            "type": "object",
+            "required": [
+              "time_stamp",
+              "token"
+            ],
+            "properties": {
+              "time_stamp": {
+                "type": "string",
+                "pattern": "^[0-9]{14}$",
+                "description": "yyyyMMddHHmmss, default Asia/Shanghai"
+              },
+              "token": {
+                "type": "string",
+                "minLength": 1,
+                "description": "prelogin 摘要"
+              }
+            }
+          },
+          "body": {
+            "type": "object",
+            "properties": {
+              "phone": {
+                "type": "string",
+                "description": "由用户提供的已授权手机号；示例为占位值。"
+              },
+              "authCode": {
+                "type": "string",
+                "description": "MD5(MD5(\"LXJ_SJM\") + \"_\" + seed.authCode)，两次均为大写 MD5。"
+              }
+            },
+            "required": [
+              "phone",
+              "authCode"
+            ]
+          }
+        }
+      },
+      "captchaResponse": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "string",
+            "description": "0 为成功。"
+          },
+          "picRandomUrl": {
+            "type": "string",
+            "description": "验证码图片 URL，可能为绝对或相对地址。"
+          }
+        },
+        "description": "Fields consumed on the success path. Failure responses can omit success fields and include reason/message. result=0，picRandomUrl 非空且为 HTTP/HTTPS URL。"
+      },
+      "captchaRefreshRequest": {
+        "type": "object",
+        "required": [
+          "header",
+          "body"
+        ],
+        "properties": {
+          "header": {
+            "type": "object",
+            "required": [
+              "time_stamp",
+              "token"
+            ],
+            "properties": {
+              "time_stamp": {
+                "type": "string",
+                "pattern": "^[0-9]{14}$",
+                "description": "yyyyMMddHHmmss, default Asia/Shanghai"
+              },
+              "token": {
+                "type": "string",
+                "minLength": 1,
+                "description": "prelogin 摘要"
+              }
+            }
+          },
+          "body": {
+            "type": "object",
+            "properties": {
+              "phone": {
+                "type": "string",
+                "description": "由用户提供的已授权手机号；示例为占位值。"
+              }
+            },
+            "required": [
+              "phone"
+            ]
+          }
+        }
+      },
+      "captchaRefreshResponse": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "string",
+            "description": "0 为成功。"
+          },
+          "picRandomUrl": {
+            "type": "string",
+            "description": "新的验证码图片 URL。"
+          }
+        },
+        "description": "Fields consumed on the success path. Failure responses can omit success fields and include reason/message. result=0，picRandomUrl 非空。"
+      },
+      "smsRequest": {
+        "type": "object",
+        "required": [
+          "header",
+          "body"
+        ],
+        "properties": {
+          "header": {
+            "type": "object",
+            "required": [
+              "time_stamp",
+              "token"
+            ],
+            "properties": {
+              "time_stamp": {
+                "type": "string",
+                "pattern": "^[0-9]{14}$",
+                "description": "yyyyMMddHHmmss, default Asia/Shanghai"
+              },
+              "token": {
+                "type": "string",
+                "minLength": 1,
+                "description": "prelogin 摘要"
+              }
+            }
+          },
+          "body": {
+            "type": "object",
+            "properties": {
+              "phone": {
+                "type": "string",
+                "description": "由用户提供的已授权手机号；示例为占位值。"
+              },
+              "picRandom": {
+                "type": "string",
+                "description": "用户人工填写的图形字符。"
+              },
+              "sourceClientCode": {
+                "type": "string",
+                "description": "来源客户端。",
+                "const": "tyg_u"
+              }
+            },
+            "required": [
+              "phone",
+              "picRandom",
+              "sourceClientCode"
+            ]
+          }
+        }
+      },
+      "smsResponse": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "string",
+            "description": "0 表示请求结果成功。"
+          },
+          "code": {
+            "type": "string",
+            "description": "1 才表示短信已发送。"
+          },
+          "reason": {
+            "type": "string",
+            "description": "失败说明；可选。"
+          }
+        },
+        "description": "Fields consumed on the success path. Failure responses can omit success fields and include reason/message. result=0 且 code=1。"
+      },
+      "loginSmsRequest": {
+        "type": "object",
+        "required": [
+          "header",
+          "body"
+        ],
+        "properties": {
+          "header": {
+            "type": "object",
+            "required": [
+              "time_stamp",
+              "token"
+            ],
+            "properties": {
+              "time_stamp": {
+                "type": "string",
+                "pattern": "^[0-9]{14}$",
+                "description": "yyyyMMddHHmmss, default Asia/Shanghai"
+              },
+              "token": {
+                "type": "string",
+                "minLength": 1,
+                "description": "prelogin 摘要"
+              }
+            }
+          },
+          "body": {
+            "type": "object",
+            "properties": {
+              "mobile": {
+                "type": "string",
+                "description": "由用户提供的已授权手机号；示例为占位值。"
+              },
+              "smsVerifyCode": {
+                "type": "string",
+                "description": "用户收到的短信码。"
+              },
+              "clientCode": {
+                "type": "string",
+                "description": "原 APP 客户端标识。",
+                "const": "tyg_u"
+              },
+              "lastLoginOs": {
+                "type": "string",
+                "description": "设备类型：小米 2、华为 3、通用 Android 4、荣耀 5。",
+                "enum": [
+                  "2",
+                  "3",
+                  "4",
+                  "5"
+                ],
+                "default": "4"
+              },
+              "changeDeviceValidate": {
+                "type": "string",
+                "description": "保留原 APP 的设备变更验证开关。",
+                "const": "1"
+              },
+              "lastLoginDeviceToken": {
+                "type": "string",
+                "description": "官方设备推送 token；当前SDK默认空字符串。",
+                "default": ""
+              },
+              "deviceUniqueId": {
+                "type": "string",
+                "description": "OAID / 官方设备标识；当前SDK默认空字符串。",
+                "default": ""
+              }
+            },
+            "required": [
+              "mobile",
+              "smsVerifyCode",
+              "clientCode",
+              "lastLoginOs",
+              "changeDeviceValidate",
+              "lastLoginDeviceToken",
+              "deviceUniqueId"
+            ]
+          }
+        }
+      },
+      "loginSmsResponse": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "string",
+            "description": "0 为成功。"
+          },
+          "code": {
+            "type": "string",
+            "description": "0 为登录成功。"
+          },
+          "token": {
+            "type": "string",
+            "description": "登录 sessionToken。"
+          },
+          "userAccount": {
+            "type": "string",
+            "description": "原服务账号标识，SDK 缺失时归一为 \"\"。"
+          },
+          "name": {
+            "type": "string",
+            "description": "用户名称，SDK 缺失时归一为 \"\"。"
+          },
+          "password": {
+            "type": "string",
+            "description": "可选：平台返回的 Base64 账户密码，对讲鉴权使用；Base64 不是加密，严禁记录真实值。"
+          },
+          "talkForbidStatus": {
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "可选：值 1 表示账号对讲被禁用；不得绕过。"
+          }
+        },
+        "description": "Fields consumed on the success path. Failure responses can omit success fields and include reason/message. result=0、code=0、token 非空；code=2 表示短信验证码错误。"
+      },
+      "loginPasswordRequest": {
+        "type": "object",
+        "required": [
+          "header",
+          "body"
+        ],
+        "properties": {
+          "header": {
+            "type": "object",
+            "required": [
+              "time_stamp",
+              "token"
+            ],
+            "properties": {
+              "time_stamp": {
+                "type": "string",
+                "pattern": "^[0-9]{14}$",
+                "description": "yyyyMMddHHmmss, default Asia/Shanghai"
+              },
+              "token": {
+                "type": "string",
+                "minLength": 1,
+                "description": "prelogin 摘要"
+              }
+            }
+          },
+          "body": {
+            "type": "object",
+            "properties": {
+              "account": {
+                "type": "string",
+                "description": "账号或手机号。"
+              },
+              "password": {
+                "type": "string",
+                "description": "原账户密码，不做本地 MD5 转换。"
+              },
+              "changeDeviceSmsCode": {
+                "type": "string",
+                "description": "服务要求设备变更验证时提供，否则传空字符串。",
+                "default": ""
+              },
+              "clientCode": {
+                "type": "string",
+                "description": "原 APP 客户端标识。",
+                "const": "tyg_u"
+              },
+              "lastLoginOs": {
+                "type": "string",
+                "description": "设备类型：小米 2、华为 3、通用 Android 4、荣耀 5。",
+                "enum": [
+                  "2",
+                  "3",
+                  "4",
+                  "5"
+                ],
+                "default": "4"
+              },
+              "changeDeviceValidate": {
+                "type": "string",
+                "description": "保留原 APP 的设备变更验证开关。",
+                "const": "1"
+              },
+              "lastLoginDeviceToken": {
+                "type": "string",
+                "description": "官方设备推送 token；当前SDK默认空字符串。",
+                "default": ""
+              },
+              "deviceUniqueId": {
+                "type": "string",
+                "description": "OAID / 官方设备标识；当前SDK默认空字符串。",
+                "default": ""
+              }
+            },
+            "required": [
+              "account",
+              "password",
+              "changeDeviceSmsCode",
+              "clientCode",
+              "lastLoginOs",
+              "changeDeviceValidate",
+              "lastLoginDeviceToken",
+              "deviceUniqueId"
+            ]
+          }
+        }
+      },
+      "loginPasswordResponse": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "string",
+            "description": "0 为成功。"
+          },
+          "code": {
+            "type": "string",
+            "description": "0 成功，3 要求设备变更验证，4 设备验证失败。"
+          },
+          "token": {
+            "type": "string",
+            "description": "登录 sessionToken。"
+          },
+          "userAccount": {
+            "type": "string",
+            "description": "原服务账号标识。"
+          },
+          "name": {
+            "type": "string",
+            "description": "名称。"
+          },
+          "password": {
+            "type": "string",
+            "description": "可选：平台返回的 Base64 账户密码，对讲鉴权使用；Base64 不是加密，严禁记录真实值。"
+          },
+          "talkForbidStatus": {
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "可选：值 1 表示账号对讲被禁用；不得绕过。"
+          }
+        },
+        "description": "Fields consumed on the success path. Failure responses can omit success fields and include reason/message. result=0、code=0、token 非空。"
+      },
+      "householdsRequest": {
+        "type": "object",
+        "required": [
+          "header",
+          "body"
+        ],
+        "properties": {
+          "header": {
+            "type": "object",
+            "required": [
+              "time_stamp",
+              "token"
+            ],
+            "properties": {
+              "time_stamp": {
+                "type": "string",
+                "pattern": "^[0-9]{14}$",
+                "description": "yyyyMMddHHmmss, default Asia/Shanghai"
+              },
+              "token": {
+                "type": "string",
+                "minLength": 1,
+                "description": "sessionToken"
+              }
+            }
+          },
+          "body": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "description": "原请求类型，字符串 1。",
+                "const": "1"
+              },
+              "openCode": {
+                "type": "string",
+                "description": "本链路为空字符串。",
+                "const": ""
+              }
+            },
+            "required": [
+              "type",
+              "openCode"
+            ]
+          }
+        }
+      },
+      "householdsResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "0 为成功。"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "areaList": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "areaName": {
+                      "type": "string",
+                      "description": "小区名。"
+                    },
+                    "organizationSeq": {
+                      "type": "string",
+                      "description": "组织编号，WS 下载门配置必需。"
+                    },
+                    "list": {
+                      "type": [
+                        "array",
+                        "object",
+                        "string"
+                      ],
+                      "description": "房产对象或数组，也可为嵌套 JSON 字符串。有效房产需要 householdSerial、mobile、token、valid=1。",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "householdSerial": {
+                            "type": "string",
+                            "description": "房产业务编号。"
+                          },
+                          "householdAddress": {
+                            "type": "string",
+                            "description": "显示地址。"
+                          },
+                          "mobile": {
+                            "type": "string",
+                            "description": "房产绑定号码。"
+                          },
+                          "valid": {
+                            "type": "string",
+                            "description": "0/1/2/3/4 权限状态。"
+                          },
+                          "token": {
+                            "type": "string",
+                            "description": "householdToken，连接 WS 和请求 authcode 使用。"
+                          },
+                          "validEndDate": {
+                            "type": "string",
+                            "description": "权限截止日期，可能缺失。"
+                          },
+                          "packageValidEndDate": {
+                            "type": "string",
+                            "description": "套餐截止日期，可能缺失。"
+                          }
+                        },
+                        "required": [
+                          "householdSerial",
+                          "mobile",
+                          "valid",
+                          "token"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "areaName",
+                    "organizationSeq",
+                    "list"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "areaList"
+            ]
+          }
+        },
+        "description": "Fields consumed on the success path. Failure responses can omit success fields and include reason/message. code=0 且 data.areaList 是数组；不要求 result 字段。"
+      },
+      "doorAuthRequest": {
+        "type": "object",
+        "required": [
+          "header",
+          "body"
+        ],
+        "properties": {
+          "header": {
+            "type": "object",
+            "required": [
+              "time_stamp",
+              "token"
+            ],
+            "properties": {
+              "time_stamp": {
+                "type": "string",
+                "pattern": "^[0-9]{14}$",
+                "description": "yyyyMMddHHmmss, default Asia/Shanghai"
+              },
+              "token": {
+                "type": "string",
+                "minLength": 1,
+                "description": "householdToken"
+              }
+            }
+          },
+          "body": {
+            "type": "object",
+            "properties": {
+              "mobile": {
+                "type": "string",
+                "description": "所选有效房产返回的 mobile。"
+              }
+            },
+            "required": [
+              "mobile"
+            ]
+          }
+        }
+      },
+      "doorAuthResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "0 为成功。"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "string",
+                "description": "开门 authcode。"
+              }
+            },
+            "required": [
+              "data"
+            ]
+          }
+        },
+        "description": "Fields consumed on the success path. Failure responses can omit success fields and include reason/message. code=0 且 data.data 非空；不要求 result 字段。"
+      },
+      "logoutRequest": {
+        "type": "object",
+        "required": [
+          "header",
+          "body"
+        ],
+        "properties": {
+          "header": {
+            "type": "object",
+            "required": [
+              "time_stamp",
+              "token"
+            ],
+            "properties": {
+              "time_stamp": {
+                "type": "string",
+                "pattern": "^[0-9]{14}$",
+                "description": "yyyyMMddHHmmss, default Asia/Shanghai"
+              },
+              "token": {
+                "type": "string",
+                "minLength": 1,
+                "description": "sessionToken"
+              }
+            }
+          },
+          "body": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          }
+        }
+      },
+      "logoutResponse": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "string",
+            "description": "0 为成功。"
+          }
+        },
+        "description": "Fields consumed on the success path. Failure responses can omit success fields and include reason/message. result=0；当前 SDK 不额外要求 code 字段。"
+      }
+    }
+  }
+}

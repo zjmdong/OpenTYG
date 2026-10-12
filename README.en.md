@@ -1,84 +1,81 @@
 <div align="center">
-  <img src="web/icons/icon-192.png" width="96" height="96" alt="OpenTYG">
-  <h1>OpenTYG</h1>
-  <p>Your existing Taoyuangu door access, in a browser and on your home screen.</p>
-  <p>
-    <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT License"></a>
-    <img src="https://img.shields.io/badge/Node.js-24%2B-339933" alt="Node.js 24 or newer">
-    <img src="https://img.shields.io/badge/mobile-PWA-5A0FC8" alt="Mobile PWA">
-  </p>
+  <h1>TYG Core SDK</h1>
+  <p>An unofficial Node.js protocol SDK for authorized Taoyuangu door access and intercom development.</p>
+  <p><a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT"></a> <img src="https://img.shields.io/badge/SDK-0.3.4-blue" alt="SDK 0.3.4"> <img src="https://img.shields.io/badge/Node.js-22.4%2B-339933" alt="Node.js 22.4 or newer"></p>
   <p><a href="README.md">简体中文</a> · <strong>English</strong></p>
 </div>
 
-OpenTYG is a self-hosted web application for signing in with an existing Taoyuangu account, selecting a property, organizing frequently used doors, and requesting remote door access. One Node.js service hosts the frontend and backend. Deploy with Docker without a frontend build or a separate database.
+This branch publishes **TYG Core SDK v0.3.4**, the latest standalone SDK version organized for this project. This is not an official Taoyuangu SDK or platform version. It supports service discovery, captchas and login, property authorization, WebSocket door access, XML provisioning, SIP signaling, and RTP media integration. The protocol baseline is the Taoyuangu Android client 1.3.8; server behavior and hardware compatibility can change.
 
-This is an independent project with no affiliation to Taoyuangu. An existing account and valid door permissions are required; the application does not grant or bypass platform permissions. The application interface is currently in Simplified Chinese; project documentation is available in Chinese and English.
+**This SDK and its documentation have no affiliation, partnership, or authorization relationship with Taoyuangu or its affiliates and are not officially endorsed or supported.** Protocol information is organized from publicly accessible client and related materials; the code is an independent adapter. Official APKs, decompiled source, native binary libraries, and real user credentials are not included. Public availability does not imply permission to use a service or redistribute materials. Use responsibly, only with accounts and devices you own or are explicitly authorized to operate. Users bear responsibility for their actions and consequences independently of the author. To the extent permitted by applicable law, the author and contributors accept no liability arising from use or misuse. See the [disclaimer](DISCLAIMER.md) and [provenance](docs/provenance.md).
 
-## Features
+## Start with the platform protocols
 
-- **Mobile experience**: touch-friendly layouts, light and dark themes, PWA installation, and home screen instructions for iPhone.
-- **Account sign-in**: SMS verification, password login, platform-required device verification, and optional remembered sessions.
-- **Properties and doors**: switch between authorized properties, drag to reorder, rename doors, and keep up to five favorites on the home screen.
-- **Connection preparation**: prepare door connections after login and when returning to the foreground; check directory context and permissions before sending a command.
-- **Private storage**: encrypt remembered login state and preferences on the server; upstream login tokens and door credentials are never returned to the browser.
-- **Simple deployment**: one container, one port, no npm runtime dependencies, a health check, and an HTTPS reverse proxy example.
+The focus is the **actual Taoyuangu platform endpoints and wire protocols**, so you can implement a client without this SDK. These references are independently maintained; they are **not official developer documentation or a platform stability commitment**.
+
+| Reference | Contents |
+| --- | --- |
+| [Platform HTTP and WebSocket API](docs/platform-api.md) | Ten JSON POST endpoints, dynamic service hosts, credential roles, field tables, responses, door configuration, and commands |
+| [HTTP OpenAPI 3.1](docs/platform-openapi.json) | Only the ten platform JSON HTTP routes; import with an OpenAPI 3.1 compatible tool |
+| [XML / SIP / RTP / ICE protocols](docs/intercom-protocol.md) | Five XML message types, personal SIP credentials, registration, outbound calls, media, and limitations |
+| [SDK reference](docs/sdk-reference.md) | `TygClient` methods, types, session storage, and error handling |
+| [Security and integration](docs/security.md) | Secrets, plaintext upstream traffic, host controls, authentication limits, and command semantics |
+| [Provenance](docs/provenance.md) / [Third-party notices](THIRD_PARTY_NOTICES.md) | Source boundaries, versions, and dependency licenses |
+
+The platform protocols do not use `/api/clients/...`, `X-Local-Key`, or OpenTYG browser cookies. XML, WebSocket, and SIP/RTP are documented separately from the HTTP OpenAPI file. Business success codes differ by endpoint: SMS delivery uses `code=1`, while login uses `code=0`. Detailed protocol field descriptions are primarily in Chinese; identifiers, schemas, examples, and the integration overview are also usable from English.
+
+## Capabilities and limits
+
+- **Door access**: service discovery, human-entered captchas, SMS or password login, device verification, property permissions, door configuration, and individual door commands.
+- **Intercom**: XML provisioning, UDP/IPv4 SIP, Digest authentication, outbound monitoring, G.711 audio, H.264 reception, RTCP, SDP renegotiation, and explicitly configured ICE/STUN/TURN.
+- **Integration**: ES modules, TypeScript declarations, state and media events, and optional Windows DPAPI session storage.
+- **Limits**: Node.js only; browsers cannot directly operate the SIP UDP adapter. One concurrent outbound call; no incoming-call acceptance, TCP/TLS SIP, SRTP, automatic backup-proxy switching, or proactive Session-Timer refresh. Extended voice and NAT traversal depend on the platform, device, and network and are not guaranteed on all installations.
+
+## Install
+
+Node.js 22.4 or newer is required; Node.js 24 is recommended. This version is distributed through Git, not the npm registry.
+
+```sh
+git clone --branch opentyg-sdk --single-branch https://github.com/zjmdong/OpenTYG.git OpenTYG-SDK
+cd OpenTYG-SDK
+npm ci --ignore-scripts
+```
+
+To use it in another Node.js project, check out the branch and install the local package:
+
+```sh
+npm install --ignore-scripts /path/to/OpenTYG-SDK
+```
 
 ## Quick start
 
-These commands target a Linux host with Docker Engine, the Compose plugin, Git, and OpenSSL. See the [deployment guide](docs/deployment.en.md) for complete instructions and alternatives.
+This example queries the authorized directory only. It **does not send SMS or open a door**. Obtain the password from secure user input or a credential store; never embed it in source, logs, or commits.
 
-```sh
-git clone https://github.com/zjmdong/OpenTYG.git
-cd OpenTYG
-cp .env.example .env
+```js
+import { TygClient } from 'tyg-core-sdk';
+
+const sdk = new TygClient({ lastLoginOs: '4' });
+try {
+  await sdk.initialize();
+  await sdk.loginPassword(accountFromSecureInput, passwordFromSecureInput);
+  const households = await sdk.getHouseholds();
+  const household = households.find(item => item.available);
+  if (!household) throw new Error('No authorized property is available');
+  const directory = await sdk.getDoors(household.id);
+  // Present directory.doors and the current directory context to the user.
+} finally {
+  sdk.close(); // Local cleanup; use logout() for platform logout.
+}
 ```
 
-Edit `.env` and set `PUBLIC_ORIGIN` to your public HTTPS address, for example `https://opentyg.example.com`. Include a nonstandard port when applicable, such as `https://opentyg.example.com:8443`.
+See [examples/list-doors.mjs](examples/list-doors.mjs) for a runnable read-only example. SMS flow: `createCaptcha → human reads and enters the image code → sendSms → human enters the SMS code → loginSms`. The SDK does not solve or bypass verification challenges. After an explicit user choice, call `openDoor` with the current `householdId`, `directoryId`, and `doorId`; see the [SDK reference](docs/sdk-reference.md).
 
-For the first deployment, generate a secret and prepare permissions for the default container user:
+## Relationship to the application
 
-```sh
-mkdir -p data secrets
-(umask 077; set -C; openssl rand -base64 32 > secrets/opentyg_secret.txt)
-sudo chown -R 10001:10001 data secrets
-sudo chmod 700 data secrets
-sudo chmod 600 secrets/opentyg_secret.txt
-docker compose up -d --build
-curl -fsS http://127.0.0.1:8080/api/health
-```
+The [main branch](https://github.com/zjmdong/OpenTYG/tree/main) contains the deployable OpenTYG web/PWA application. This branch contains the SDK library and platform references, without a web server, customer configuration, runtime logs, or field reports. Main embeds a server-specific SDK adaptation, including stable door identifiers. This branch preserves the standalone v0.3.4 core source; do not replace main's vendor directory directly with it.
 
-The generation command refuses to overwrite an existing secret. **Preserve the original `data/` and `secrets/` during upgrades and migrations; do not regenerate the secret.** If you change the UID/GID in `.env`, update the ownership of both directories and the secret file to match.
+## Security, contributions, and license
 
-Configure your domain, a valid certificate, and an HTTPS reverse proxy targeting `http://127.0.0.1:8080`. A [sample Nginx configuration](deploy/nginx-opentyg.conf) is included. By default the HTTP port is bound to loopback; users access the configured HTTPS origin. Opening the internal HTTP address directly does not support production login.
+This SDK is not a complete public authentication service. Integrators must provide SMS/password limits, browser sessions, CSRF protection, host restrictions, encrypted persistence, and operation auditing. `serializeLoginSession()` **contains tokens and potentially an account password and does not encrypt them**. Never write those bytes directly to a file, send them to browsers, or log them. Optional Windows storage uses DPAPI; other systems require their own trusted encrypted store.
 
-## Install on a phone
-
-Open the HTTPS site in a supported Android browser and use the installation entry or the browser's install menu. On iPhone, use Safari's **Share → Add to Home Screen**. Automatic installation prompts depend on the browser's own policies.
-
-Once installed, the application opens in a standalone window from the home screen. Door access requires a network connection. The offline page only asks you to reconnect; it never caches account data or queues or replays door commands.
-
-## Documentation
-
-| Document | Contents |
-| --- | --- |
-| [Deployment](docs/deployment.en.md) / [中文](docs/deployment.md) | Docker, HTTPS, port forwarding, mobile installation, upgrades, and troubleshooting |
-| [Configuration](docs/configuration.md) | Environment variables, runtime identity, upstream hosts, and local development |
-| [Architecture](docs/architecture.md) | Browser, backend, platform services, and storage |
-| [Privacy and operations](docs/security.md) | Credential lifecycle, encryption boundaries, backup, and recovery |
-| [API reference](docs/api.md) | Sessions, directory context, door operations, and errors |
-
-## Security and operational boundaries
-
-Production browser connections require HTTPS. The default upstream configuration permits HTTP/WS for compatibility. Public HTTPS protects the browser-to-proxy connection; it cannot encrypt backend communication with an HTTP upstream. Evaluate this boundary for your network and restrict the upstream host list. Disable HTTP compatibility if a verified HTTPS/WSS upstream becomes available.
-
-A successful platform acknowledgment does not guarantee that a physical lock opened. A connection loss or timeout after sending produces an unknown result, and the application does not resend automatically. Check the door before deciding whether to try again.
-
-Storage is designed for a single instance. Do not run multiple processes or containers against the same data directory. Never upload `data/`, `secrets/`, `.env`, certificate private keys, or runtime logs to a repository.
-
-## Contributing
-
-Use [Issues](https://github.com/zjmdong/OpenTYG/issues) for ordinary bug reports and suggestions, and Pull Requests for contributions. Read [CONTRIBUTING.md](CONTRIBUTING.md) first. For security concerns, follow [SECURITY.md](SECURITY.md) and do not publish account details, tokens, or sensitive reproduction information.
-
-## License
-
-OpenTYG source code is distributed under the [MIT License](LICENSE). This license does not cover third-party platform services, accounts, door hardware, or trademarks.
+Use [Issues](https://github.com/zjmdong/OpenTYG/issues) for ordinary reports, read [CONTRIBUTING.md](CONTRIBUTING.md) before contributing, and follow [SECURITY.md](SECURITY.md) for vulnerabilities. Original code uses [MIT](LICENSE); dependencies retain their [respective licenses](THIRD_PARTY_NOTICES.md). MIT grants no rights to third-party services, accounts, materials, hardware, or trademarks.

@@ -20,6 +20,6 @@ Privately include the code commit, deployment mode, impact, minimal reproduction
 
 Relevant areas include account isolation, authorization, sessions and credentials, CSRF, directory identity, duplicate door commands, storage integrity, and public ingress. Report platform, lock firmware, carrier, or third-party proxy vulnerabilities to their respective maintainers as well.
 
-维护重点为 `main` 当前版本，不承诺旧版本安全回补。默认 HTTP/WS 上游的传输边界已在 [隐私与运维](docs/security.md) 中说明；发现超出该已知边界的实际漏洞仍欢迎报告。项目未承诺无漏洞、合规认证或安全 SLA。
+本分支维护 `opentyg-sdk` 当前版本，重点包括 XML 解析、SIP/RTP/ICE 信令与媒体边界、请求目标、敏感会话序列化和凭据存储。网页应用由 `main` 分支维护；不承诺旧版本安全回补。默认 HTTP/WS 及 SIP/RTP 的传输边界已在 [安全与集成](docs/security.md) 中说明；发现超出该已知边界的实际漏洞仍欢迎报告。项目未承诺无漏洞、合规认证或安全 SLA。
 
-Maintenance focuses on the current `main` branch, without promised backports to older versions. The default HTTP/WS upstream boundary is documented in [privacy and operations](docs/security.md); reports of vulnerabilities beyond that known boundary are welcome. No vulnerability-free guarantee, compliance certification, or security SLA is offered.
+This branch maintains the current `opentyg-sdk`, including XML parsing, SIP/RTP/ICE boundaries, request targets, secret-bearing session serialization, and credential storage. The web application is maintained on `main`; backports are not promised. HTTP/WS and SIP/RTP transport boundaries are documented in [security and integration](docs/security.md). Reports beyond those known boundaries are welcome. No vulnerability-free guarantee, compliance certification, or security SLA is offered.

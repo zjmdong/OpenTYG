@@ -1,67 +1,39 @@
-# 隐私与运维 / Privacy and operations
+# 安全与集成 / Security and integration
 
-[中文 README](../README.md) · [English README](../README.en.md) · [安全报告 / Security reporting](../SECURITY.md)
+[免责声明](../DISCLAIMER.md) · [平台 API](platform-api.md) · [SDK 参考](sdk-reference.md)
 
-## 凭据生命周期 / Credential lifecycle
+本 SDK 是底层协议库，不是带完整账号保护的公网后端。应用集成方负责自己的认证、权限、输入校验、主机限制、限流、存储、日志脱敏和用户操作确认。
 
-- 密码和短信码通过同源登录请求交给后端，按官方协议送往上游。应用不把登录密码写入日志、偏好或记住登录文件；未使用的对讲密码保留功能关闭。
-- 浏览器仅持有本服务的签名随机会话 Cookie，属性为 `HttpOnly`、`Secure`、`SameSite=Strict`。浏览器不接收上游登录 token、开门 authcode 或房产 token。已授权用户仍可看到自己的名称、脱敏账号及房产信息。
-- 未勾选“记住登录”的浏览器会话最多 12 小时，服务重启后不恢复。勾选后最长 30 天绝对期限，并将恢复所需的上游登录状态加密保存；平台仍可能更早使其失效。若同账号已有其他被记住的会话，其恢复凭据可以继续保留。
-- 退出登录撤销此账号在本服务上的所有浏览器会话，删除其保存的登录凭据；收藏、排序和名称仍保留。过期且不再被记住的登录凭据由定期清理移除。偏好没有自动到期清理，管理员应制定保留与删除策略。
+## 凭据 / Credentials
 
-Passwords and SMS codes are submitted through same-origin login requests and forwarded using the platform protocol. The app does not write login passwords to logs, preferences, or remembered login files; unused intercom password retention is disabled. The browser holds only this service's signed random session cookie, with `HttpOnly`, `Secure`, and `SameSite=Strict`. Upstream login tokens, door authcodes, and property tokens are not returned to it; authorized users still see their own names, masked accounts, and property details.
+账号密码、短信码、图形挑战、sessionToken、householdToken、authcode、Cookie、个人 SIP 密码、ICE/TURN 凭据都是秘密。登录响应可能包含 Base64 账户密码；Base64 不是加密。SDK 可在内存中保留密码供对讲使用，且 `serializeLoginSession()` 包含秘密。序列化并不加密，只有交给可信加密存储后才可持久化。
 
-Browser-only sessions last at most 12 hours and do not survive server restart. Remembered sessions have a 30-day absolute limit and persist the encrypted upstream state needed for restoration; the platform can invalidate them sooner. Restoration credentials may remain if another browser for the same account has a remembered session. Logout revokes all browser sessions for that account and removes saved login credentials while retaining preferences. Expired credentials without a remembered session are pruned periodically. Preferences have no automatic expiry; operators should define retention and deletion policies.
+不得将完整响应、带 token 的 URL、个人配置、原始 SDP 或序列化字节返回浏览器、写日志或提交仓库。默认 SDK 凭据掩码不等于删除原内存秘密；`getCredentials({includeSecrets:true})` 只用于可信后端。WindowsLoginStore 为当前用户 DPAPI；其他系统须自行实现加密与密钥生命周期。禁止退化为明文文件或 localStorage。
 
-## 磁盘数据 / Data on disk
+## 网络 / Network
 
-| 文件 / File | 内容与保护 / Contents and protection |
-| --- | --- |
-| `secrets/opentyg_secret.txt` | 外部随机秘密，主机明文文件，以权限限制访问；必须独立保护 / External random secret, plaintext on the host with restricted permissions; protect separately |
-| `data/.app-secret` | 随机数据密钥，由外部秘密封装 / Random data key wrapped by the external secret |
-| `data/users/*.blob` | 被记住的登录恢复数据，AES-256-GCM 加密 / Remembered login restoration data, encrypted with AES-256-GCM |
-| `data/prefs/*.prefs`、`*.prefs.bak` | 用户/房产偏好及上一份写入前备份，均加密 / Encrypted user/property preferences and previous-write backups |
-| `data/sessions.json` | 仅被记住的会话记录，加密 / Encrypted remembered browser session records |
-| `data/auth-limits.json` | 加密认证限流，账号标识为用途绑定 HMAC，不保存密码 / Encrypted authentication limits using purpose-bound account HMACs, without passwords |
+默认 origin 兼容 HTTP，门禁可能使用 WS；公网 HTTPS 不能加密服务器到上游的明文通信。SIP Digest 不等于信令或 RTP 加密；当前 SIP UDP / RTP 不支持 TLS/SRTP。不要宣传为全链路端到端加密。
 
-加密文件使用随机 IV、认证标签和用途绑定上下文。文件名中的用户 ID 由外部秘密与账号通过 HMAC 派生。凭据、偏好、会话和业务限流共用随机数据密钥；外部秘密还用于标识派生及 Cookie 签名。
+独立 v0.3.4 SDK 根据配置返回的 HTTP/WS 主机和 SIP/SDP 地址通信，没有 main 网页服务的完整主机白名单和稳定门 ID 改造。将 origin、服务配置、图片 URL、SIP 代理及媒体目的地视为网络信任边界：限定预期主机/地址、协议和端口，禁止 URL userinfo，控制重定向，并设置出站防火墙。`fetchImpl` 可控制 HTTP，但不覆盖原生 WebSocket、DNS 或 UDP；仍需网络层限制。不要把浏览器任意 URL 传给 SDK。
 
-Encrypted files use random IVs, authentication tags, and purpose-bound context. User IDs in filenames are HMAC-derived from the external secret and account. Credentials, preferences, sessions, and business limits share the random data key; the external secret also derives identifiers and signs cookies.
+系统 DNS 返回 Fake-IP 时，SIP 解析可能将代理域名发送给 AliDNS/Google 的 HTTPS DNS 服务，见 [对讲网络说明](intercom-protocol.md)。STUN/TURN 只能使用有权使用的服务，凭据避免长期硬编码，媒体用户授权单独处理。
 
-加密主要保护泄露的数据目录副本。如果攻击者同时取得密钥、主机管理员权限或运行进程控制权，加密不能继续保护数据。普通 Compose secrets 是文件挂载，不是主机端密钥保险库；TLS 证书私钥也应由代理环境独立管理。
+## 用户与物理操作 / Users and physical operations
 
-Encryption primarily protects a leaked copy of the data directory. It cannot protect against an attacker who also obtains the key material, host administrator access, or control of the running process. Ordinary Compose secrets are file mounts, not a host-side key vault. Manage TLS private keys separately in the proxy environment.
+一个实例对应一个账号，用户必须绑定自己的实例和当前房产上下文。用户可选择的设备只能来自其当前授权配置。SDK 本地序号不是持久 ID，不能用序号替代稳定业务标识来跨目录映射设备。
 
-## 写入可靠性 / Write reliability
+SDK 的 3 秒操作间隔和 60 秒短信提示不等于账号级限流。集成方需要对手机号短信、账号密码错误、IP/会话请求量建立持久策略，并遵守平台限制。不得批量猜测密码、骚扰发送验证码或规避设备验证。
 
-存储先写临时文件并同步，再原子替换目标，POSIX 环境还同步父目录；新私有文件权限为 `0600`。偏好覆盖前保留上一份加密备份。载入失败、缺失数据密钥或认证限流写入失败会报错，不静默生成新密钥或清空限流。
+开门消息发送后断连/超时为结果未知，不能自动重发；等待用户核对物理门状态。SIP 注册/接听只是信令结果，音视频和远端挂断仍需验证。收音、监看、保存或传播音视频须取得所需授权，并保护住户隐私。
 
-Writes use a synced temporary file followed by atomic replacement, plus parent-directory syncing on POSIX. New private files use `0600`. Preference writes retain the previous encrypted version. Load failures, missing data keys, and authentication-limit write failures are surfaced rather than silently regenerating keys or resetting limits.
+## 公网应用 / Public applications
 
-这些措施不替代备份，也不能保证故障磁盘或所有网络文件系统的持久性。使用可靠的本地文件系统，避免共享数据目录，限制为单实例；备份恢复步骤见 [中文部署指南](deployment.md) / [English deployment guide](deployment.en.md)。
+浏览器连接必须使用 HTTPS，应用自己实现安全 Cookie、CSRF/Origin/Host 校验、会话撤销、权限检查、输出转义、请求大小限制和账号隔离。不要直接把 SDK 的秘密返回结构作为公共 API。生产加密存储应可备份与恢复，并防止多个进程无锁读写；本 SDK 不提供分布式持久化。对接更完整的网页部署可参考 main，但不能用本分支直接覆盖其安全适配层。
 
-These measures do not replace backups or guarantee durability on failing disks or every network filesystem. Use reliable local storage, keep the data directory exclusive, and run one instance. Follow the linked deployment guides for backup and recovery.
+## English
 
-## 认证限流 / Authentication limits
+This library is not a complete public backend. Integrators are responsible for application authentication, authorization, rate limits, validation, logging, persistence, and explicit user actions. Tokens, passwords, XML cookies, SIP/ICE/TURN credentials, and session bytes must remain in trusted components. `serializeLoginSession()` contains plaintext secrets until your store encrypts them; Base64 in platform responses is not encryption. Windows DPAPI is optional and does not provide Linux/NAS storage.
 
-短信按手机号跨浏览器共享滚动窗口：1 小时最多 3 次，12 小时最多 12 次；成功和结果不确定的发送尝试计入，明确未发送的拒绝可退还计数。10 分钟内第 4 次密码错误开始锁定账号 1 小时，密码和短信新登录均受限；设备验证与网络失败不作为密码错误计数。限流持久化，重启仍生效，不注销已登录会话。
+Default HTTP/WS upstream compatibility and SIP/RTP UDP are not end-to-end encryption. Never disable TLS verification. Apply host, protocol, port, redirect, and outbound network restrictions to service discovery, captcha URLs, WebSocket hosts, SIP proxies, and SDP/media destinations. A custom `fetchImpl` covers HTTP only, not native WebSocket, DNS, or UDP. Fake-IP SIP resolution can query AliDNS/Google HTTPS DNS services. Use authorized STUN/TURN services and user-approved media inputs only.
 
-SMS attempts share rolling per-phone limits across browsers: at most three in one hour and twelve in twelve hours. Successful and uncertain sends count; definite non-send rejections can release a reservation. The fourth password failure within ten minutes locks new password and SMS logins for one hour. Device verification and network failures do not count as incorrect passwords. Limits persist across restarts and do not revoke existing signed-in sessions.
-
-反向代理后，额外的短窗口网络限流可能按代理来源共享；业务手机号/账号限流仍独立。大量账号攻击与代理层限流需要按实际规模设计，应用不是通用身份认证平台。
-
-Behind a reverse proxy, additional short-window network limits may be shared by requests from that proxy; business phone/account limits remain separate. Design ingress protection for your expected scale. This application is not a general-purpose identity platform.
-
-## 网络与上线检查 / Network and launch checks
-
-生产保持固定 HTTPS `PUBLIC_ORIGIN`、Secure Cookie、精确 Host/Origin 校验、请求标记和当前目录校验。内部 HTTP 仅限回环或受控内网。默认上游 HTTP/WS 兼容意味着后端到平台的流量未加密，可能暴露登录与门禁凭据；浏览器 HTTPS 无法改变此事实。允许名单限制目标主机，但不提供传输加密。上游可用 HTTPS/WSS 时应验证兼容性再关闭 HTTP。
-
-Production keeps a fixed HTTPS `PUBLIC_ORIGIN`, Secure cookies, exact Host/Origin checks, request markers, and current directory validation. Restrict internal HTTP to loopback or a controlled private network. Default upstream HTTP/WS compatibility leaves backend-to-platform traffic unencrypted and can expose login and door credentials; browser HTTPS does not change this. The host allowlist restricts destinations but does not encrypt transport. Verify a working HTTPS/WSS upstream before disabling HTTP.
-
-上线前检查：域名与证书、代理保留端口和 Origin、内部端口隔离、文件所有者与权限、完整密钥备份、单实例运行、实际账号与门锁权限。关闭代理/CDN 私有响应缓存；避免请求体和凭据日志。日志默认留在标准输出并由 Docker 轮转，分享前仍要检查内容。项目不包含外部分析服务；部署时自行加入的监控、CDN、备份和日志服务也需审查数据去向。
-
-Before launch, check the domain and certificate, preserved ports and Origin, internal-port isolation, filesystem permissions, complete key backups, single-instance operation, and actual account/lock permissions. Disable private-response caching and avoid credential or body logging. Runtime logs go to stdout and are rotated by Docker; review them before sharing. No external analytics service is included. Assess data handling in any monitoring, CDN, backup, or logging service you add.
-
-本项目没有经过正式认证或渗透测试的承诺，不能证明不存在所有缺陷。安全问题按 [SECURITY.md](../SECURITY.md) 报告；不要在公开 Issue 提交真实凭据或住户信息。
-
-The project makes no claim of formal certification or a completed penetration test and cannot establish the absence of every defect. Follow [SECURITY.md](../SECURITY.md) for reports; never post real credentials or resident data in public issues.
+Provide persistent SMS/password limits, browser sessions, secure cookies, CSRF/Origin/Host checks, account isolation, and permission validation. Device references must come from the user's current configuration. Never retry a door command automatically after a lost acknowledgment. A SIP registration/call acknowledgment does not prove usable media or a physical lock state. Follow platform terms, property rules, privacy requirements, and applicable laws; see the disclaimer.

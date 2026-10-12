@@ -1,84 +1,82 @@
 <div align="center">
-  <img src="web/icons/icon-192.png" width="96" height="96" alt="OpenTYG">
-  <h1>OpenTYG</h1>
-  <p>把已有的桃园谷门禁权限，带到浏览器和手机主屏幕。</p>
-  <p>
-    <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT License"></a>
-    <img src="https://img.shields.io/badge/Node.js-24%2B-339933" alt="Node.js 24 or newer">
-    <img src="https://img.shields.io/badge/mobile-PWA-5A0FC8" alt="Mobile PWA">
-  </p>
+  <h1>TYG Core SDK</h1>
+  <p>桃园谷平台的非官方 Node.js 协议适配 SDK · 门禁与对讲开发参考</p>
+  <p><a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT"></a> <img src="https://img.shields.io/badge/SDK-0.3.4-blue" alt="SDK 0.3.4"> <img src="https://img.shields.io/badge/Node.js-22.4%2B-339933" alt="Node.js 22.4 or newer"></p>
   <p><strong>简体中文</strong> · <a href="README.en.md">English</a></p>
 </div>
 
-OpenTYG 是一个可自行部署的移动端网页应用，支持通过已有桃园谷账号登录、选择房产、管理常用门禁和远程开门。前端与后端由一个 Node.js 服务提供，通过 Docker 即可部署，无需前端构建或额外数据库。
+本分支发布 TYG Core SDK **v0.3.4**，这是本项目当前整理的最新独立 SDK 版本，不表示桃园谷官方 SDK 或平台的版本。它提供服务发现、验证码与登录、房产鉴权、WebSocket 门禁，以及 XML 配置、SIP 信令和 RTP 媒体适配，供开发者在有效授权范围内开发自己的客户端。协议整理基线为桃园谷 Android 客户端 1.3.8；服务端行为和设备兼容性可能变化。
 
-本项目为独立实现，与桃园谷官方没有隶属关系。使用前需要已有账号及有效门禁权限；应用不会授予或绕过平台权限。当前应用界面为简体中文，项目文档提供中英双语。
+**本 SDK 及文档与桃园谷官方及其关联方无任何隶属、合作或授权关系，未获得官方认可，也不由官方提供技术支持。** 协议资料依据公开渠道可获取的客户端及相关资料整理，代码为独立适配实现；仓库不包含官方 APK、反编译源码、原生二进制库或真实用户凭据。公开可获取不等于服务调用或再分发授权。请负责任地使用，仅操作本人或已获明确授权的账号与设备；用户的行为及其后果由用户自行承担，与作者无关。在适用法律允许的范围内，作者及贡献者不承担因使用或滥用产生的责任。详见 [免责声明](DISCLAIMER.md) 和 [来源与授权边界](docs/provenance.md)。
 
-## 功能
+## 先读平台接口文档
 
-- **手机使用**：适配触屏、深浅色主题，支持安装为 PWA；iPhone 提供添加到主屏幕的操作说明。
-- **账号登录**：短信验证码、密码登录及平台要求的设备验证；可选择记住登录。
-- **房产与门禁**：切换有权限的房产、拖动排序、自定义名称，首页最多收藏 5 个门禁。
-- **连接准备**：登录后及回到前台时提前准备门禁连接，发送开门指令前检查目录和权限。
-- **私有存储**：服务端加密保存记住的登录状态和用户偏好，浏览器不接收上游登录令牌或开门凭据。
-- **简单部署**：单容器、单端口、无 npm 运行时依赖；附带健康检查和 HTTPS 反向代理示例。
-
-## 快速开始
-
-以下命令适用于安装了 Docker Engine、Compose 插件、Git 和 OpenSSL 的 Linux 主机。完整步骤及其他部署方式见 [部署指南](docs/deployment.md)。
-
-```sh
-git clone https://github.com/zjmdong/OpenTYG.git
-cd OpenTYG
-cp .env.example .env
-```
-
-编辑 `.env`，把 `PUBLIC_ORIGIN` 改为你的公网 HTTPS 地址，例如 `https://opentyg.example.com`。如果使用非标准端口，必须包含端口，例如 `https://opentyg.example.com:8443`。
-
-首次部署生成密钥，并为默认容器用户准备权限：
-
-```sh
-mkdir -p data secrets
-(umask 077; set -C; openssl rand -base64 32 > secrets/opentyg_secret.txt)
-sudo chown -R 10001:10001 data secrets
-sudo chmod 700 data secrets
-sudo chmod 600 secrets/opentyg_secret.txt
-docker compose up -d --build
-curl -fsS http://127.0.0.1:8080/api/health
-```
-
-密钥生成命令会拒绝覆盖已有文件。**升级或迁移时保留原有 `data/` 和 `secrets/`，不要重新生成密钥。** 如果修改了 `.env` 中的 UID/GID，目录和密钥文件的所有者也要一致。
-
-接着配置域名、有效证书和 HTTPS 反向代理，指向 `http://127.0.0.1:8080`。可参考 [Nginx 示例](deploy/nginx-opentyg.conf)。默认只把 HTTP 端口绑定到本机；用户从配置的 HTTPS 地址访问应用。直接打开内部 HTTP 地址不能完成生产登录。
-
-## 手机安装
-
-通过 HTTPS 打开应用后，支持安装提示的 Android 浏览器可使用安装入口；也可从浏览器菜单选择安装。iPhone 使用 Safari 的“分享 → 添加到主屏幕”。浏览器是否自动显示安装提示由其自身策略决定。
-
-安装后可从主屏幕启动独立窗口。开门需要联网；离线页只提示恢复连接，不缓存账号数据、不排队或重放开门指令。
-
-## 文档
+本分支的重点是**桃园谷平台实际使用的接口与协议**，方便不使用本 SDK 的开发者按协议实现自己的客户端。以下文档由本项目独立整理，**不是官方编写、发布或承诺稳定的开发者文档**。
 
 | 文档 | 内容 |
 | --- | --- |
-| [部署指南](docs/deployment.md) / [English](docs/deployment.en.md) | Docker、HTTPS、端口映射、手机安装、升级与排障 |
-| [配置参考](docs/configuration.md) | 环境变量、运行用户、上游地址与本机开发 |
-| [架构说明](docs/architecture.md) | 浏览器、后端、平台服务和数据存储 |
-| [隐私与运维](docs/security.md) | 凭据生命周期、加密边界、备份与恢复 |
-| [API 参考](docs/api.md) | 会话、目录、门禁操作和错误处理 |
+| [平台 HTTP 与 WebSocket API](docs/platform-api.md) | 10 个 JSON POST 接口、动态服务地址、三层凭据、字段、回执、门目录及开门消息 |
+| [HTTP OpenAPI 3.1](docs/platform-openapi.json) | 仅包含平台的 10 个 JSON HTTP 路径，可导入支持 OpenAPI 3.1 的工具 |
+| [平台 XML / SIP / RTP / ICE 协议](docs/intercom-protocol.md) | 5 类 XML 消息、个人 SIP 配置、注册、出呼、媒体与实现边界 |
+| [SDK 使用参考](docs/sdk-reference.md) | `TygClient` 方法、返回类型、会话保存及错误处理 |
+| [安全与集成](docs/security.md) | 凭据、HTTP 明文边界、主机限制、限流、操作幂等与部署职责 |
+| [来源说明](docs/provenance.md) / [第三方许可](THIRD_PARTY_NOTICES.md) | 资料来源边界、版本和依赖许可证 |
 
-## 安全与使用边界
+这些平台接口没有 `/api/clients/...`、`X-Local-Key` 或 OpenTYG 浏览器会话 Cookie。XML、WebSocket 和 SIP/RTP 无法完整表示为 HTTP OpenAPI，因此单独记录协议。平台的成功码并不统一：例如短信发送成功是 `code=1`，登录成功是 `code=0`。
 
-浏览器到本服务的生产连接必须使用 HTTPS。默认上游配置兼容 HTTP／WS；公网 HTTPS 只保护浏览器到反向代理这一段，无法加密后端到 HTTP 上游的通信。请按你的网络环境评估这一边界，限制上游主机名单；若上游提供经验证的 HTTPS／WSS，再关闭 HTTP 兼容。
+## 能力与边界
 
-收到平台成功回执不等于物理门锁一定开启。发送后断网或超时会显示结果未知，应用不会自动重发；请确认现场状态，再决定是否重新操作。
+- **门禁**：服务发现、人工图形验证、短信或密码登录、设备变更验证、房产权查询、门目录下载和单次开门请求。
+- **对讲**：个人 XML 配置、UDP/IPv4 SIP、Digest 鉴权、主动监看、G.711 音频、H.264 接收、RTCP、SDP 重协商及显式配置的 ICE/STUN/TURN。
+- **开发接口**：ES modules、TypeScript 类型声明、状态与媒体事件，以及可选的 Windows DPAPI 登录存储。
+- **限制**：Node.js SDK；浏览器不能直接使用其中的 SIP UDP 模块。仅一个并发出呼；不支持来电接听、TCP/TLS SIP、SRTP、备代理自动切换或主动 Session-Timer 刷新。语音扩展和 NAT 穿透依赖平台、设备与网络，不保证所有设备可用。
 
-本项目采用单实例文件存储，不支持多个进程或容器同时读写同一数据目录。不要把 `data/`、`secrets/`、`.env`、证书私钥或运行日志上传到代码仓库。
+## 安装
 
-## 参与项目
+需要 Node.js 22.4 或更新版本，建议使用 Node.js 24。此版本通过 Git 分支分发，未发布到 npm 注册表。
 
-欢迎通过 [Issues](https://github.com/zjmdong/OpenTYG/issues) 报告普通问题或提出建议，通过 Pull Request 贡献修改。提交前请阅读 [贡献指南](CONTRIBUTING.md)。安全问题请参照 [SECURITY.md](SECURITY.md)，不要公开账号、令牌或可直接复现的敏感信息。
+```sh
+git clone --branch opentyg-sdk --single-branch https://github.com/zjmdong/OpenTYG.git OpenTYG-SDK
+cd OpenTYG-SDK
+npm ci --ignore-scripts
+```
 
-## 许可证
+在其他 Node.js 项目中，可先检出上述目录，再安装本地包：
 
-OpenTYG 的源代码以 [MIT 许可证](LICENSE) 发布。第三方平台服务、账号、门禁设备及商标不属于本项目的授权范围。
+```sh
+npm install --ignore-scripts /path/to/OpenTYG-SDK
+```
+
+## 快速接入
+
+以下示例只查询当前账号的门禁目录，**不会开门或发送短信**。密码由你的应用从安全输入或凭据存储获得；不要写进源码、日志或提交记录。
+
+```js
+import { TygClient } from 'tyg-core-sdk';
+
+// 一个实例对应一个账号；SDK 本身不提供公网 HTTP 服务。
+const sdk = new TygClient({ lastLoginOs: '4' });
+try {
+  await sdk.initialize();
+  await sdk.loginPassword(accountFromSecureInput, passwordFromSecureInput);
+  const households = await sdk.getHouseholds();
+  const household = households.find(item => item.available);
+  if (!household) throw new Error('账号没有可用房产');
+  const directory = await sdk.getDoors(household.id);
+  // 将 directory.doors 的名称和本次目录引用展示给用户。
+} finally {
+  sdk.close(); // 释放本地资源；如需注销平台登录，应调用 logout()。
+}
+```
+
+完整可运行的只读示例见 [examples/list-doors.mjs](examples/list-doors.mjs)。短信流程为 `createCaptcha → 用户查看并填写图形码 → sendSms → 用户填写短信码 → loginSms`；SDK 不识别或绕过验证码。用户明确选择门禁后，使用当前 `householdId`、`directoryId` 和 `doorId` 调用 `openDoor`，见 [SDK 参考](docs/sdk-reference.md)。
+
+## 与网页应用的关系
+
+[main 分支](https://github.com/zjmdong/OpenTYG/tree/main) 是可部署的 OpenTYG 网页 / PWA 应用；本分支是 SDK 库和平台协议参考，不包含网页服务器、客户部署配置、运行日志或现场测试资料。main 内嵌的是经过服务端安全适配的 SDK，包含稳定门 ID 等修改；本分支保留独立 v0.3.4 的核心源码，不能直接覆盖 main 的 vendor 目录。
+
+## 安全、贡献与许可证
+
+SDK 不是完整的公网认证服务：短信与密码限流、浏览器会话、CSRF、主机白名单、加密持久化和操作审计由集成方负责。`serializeLoginSession()` **包含登录令牌与可能的账户密码，不会自动加密**；不要直接写文件、发给浏览器或记录到日志。Windows 存储为可选 DPAPI 适配，其他系统需要自己的可信加密存储。
+
+普通问题通过 [Issues](https://github.com/zjmdong/OpenTYG/issues) 反馈，贡献步骤见 [CONTRIBUTING.md](CONTRIBUTING.md)，安全问题参见 [SECURITY.md](SECURITY.md)。原创代码以 [MIT](LICENSE) 许可；第三方依赖保留 [各自许可证](THIRD_PARTY_NOTICES.md)。MIT 不授予第三方平台、账号、资料、设备或商标的权利。

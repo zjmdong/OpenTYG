@@ -1,0 +1,16 @@
+{
+  "sdkVersion": "0.3.4",
+  "protocolBaseline": "Taoyuangu Android client 1.3.8",
+  "files": {
+    "src/tyg-client.mjs": "9d86b36fb1bcc771c3169a62adde257f24746aff0731138d793c3021b3e2339a",
+    "src/tyg-client.d.ts": "f2d9b10d8cfd5b8ef08bb9ab9751916b2e3e95cc1a777de9e849de2bc38534c7",
+    "src/login-store.mjs": "d0197036c99469b7991aca8431b8fed19b8b8e9e6607694e43669fd05a46d884",
+    "src/login-store.d.ts": "7a87c6b8edd0b23ce54067e3742728dbed4fbea3e25d787f8625dc2526106a67",
+    "src/intercom/ice.mjs": "328711d9e389eb45c9bfa52e523996171c4ed602166249c7fc129c5f3f9d8ee9",
+    "src/intercom/media.mjs": "648edaf5708b17a2894b879deb1e3c65ed859d830bfaf9685f1455c46e1d99c0",
+    "src/intercom/network.mjs": "2e9ef4b6772880e73c973e3916003d647156a99a0ccf9575bb554ec36775af2d",
+    "src/intercom/provision.mjs": "27968d3fc8d8e715e5a8e9b48de0aadb9035e6abb2bd320d788d20ee1ec8c86e",
+    "src/intercom/sip.mjs": "02a91dd8f0db4ed7942ce827105b940ffedaa14170da9795dcb0b0cb7448a5c6"
+  },
+  "packagingChange": "The ICE wrapper resolves pinned npm dependencies by package name instead of a bundled node_modules directory. Core SDK source files are preserved byte-for-byte."
+}
