@@ -1,10 +1,6 @@
 services:
   opentyg:
-    build:
-      context: .
-      args:
-        NODE_IMAGE: ${NODE_IMAGE:-node:24-alpine}
-    image: opentyg:1.2.1
+    image: ghcr.io/zjmdong/opentyg:${OPENTYG_VERSION:-1.2.1}
     container_name: opentyg
     restart: unless-stopped
     init: true

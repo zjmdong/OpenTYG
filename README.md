@@ -59,11 +59,23 @@ TYG Core SDK 是本项目的**非官方协议适配实现**，不是桃园谷官
 
 ## 快速开始
 
-以下命令适用于安装了 Docker Engine、Compose 插件、Git 和 OpenSSL 的 Linux 主机。完整步骤及其他部署方式见 [部署指南](docs/deployment.md)。
+公开镜像支持 **amd64 / arm64**，无需下载源码或登录 GitHub。推荐固定版本：
 
 ```sh
-git clone https://github.com/zjmdong/OpenTYG.git
+docker pull ghcr.io/zjmdong/opentyg:1.2.1
+```
+
+[镜像与版本](https://github.com/zjmdong/OpenTYG/pkgs/container/opentyg) · [仅部署配置包](https://github.com/zjmdong/OpenTYG/releases/download/v1.2.1/OpenTYG-deploy-v1.2.1.zip)。镜像不包含用户数据或密钥；启动前仍需配置域名、持久目录和独立密钥。
+
+以下命令适用于安装了 Docker Engine、Compose 插件、OpenSSL、curl 和 unzip 的 Linux 主机。完整步骤及其他部署方式见 [部署指南](docs/deployment.md)。
+
+```sh
+mkdir -p OpenTYG
 cd OpenTYG
+curl -fL -o OpenTYG-deploy-v1.2.1.zip https://github.com/zjmdong/OpenTYG/releases/download/v1.2.1/OpenTYG-deploy-v1.2.1.zip
+curl -fL -o DEPLOY-SHA256SUMS.txt https://github.com/zjmdong/OpenTYG/releases/download/v1.2.1/DEPLOY-SHA256SUMS.txt
+sha256sum -c DEPLOY-SHA256SUMS.txt
+unzip OpenTYG-deploy-v1.2.1.zip
 cp .env.example .env
 ```
 
@@ -77,7 +89,8 @@ mkdir -p data secrets
 sudo chown -R 10001:10001 data secrets
 sudo chmod 700 data secrets
 sudo chmod 600 secrets/opentyg_secret.txt
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 curl -fsS http://127.0.0.1:8080/api/health
 ```
 

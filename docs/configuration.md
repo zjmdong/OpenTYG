@@ -14,7 +14,8 @@ Copy `.env.example` to `.env`. Compose reads these variables, enables Secure coo
 | `LAN_BIND_IP` | `127.0.0.1` | 主机 HTTP 绑定地址；远程代理需改为受控内网地址。Host HTTP binding; use a restricted private address for a remote proxy. |
 | `APP_PORT` | `8080` | 主机端口，映射到容器 `8787`。Host port mapped to container port `8787`. |
 | `APP_UID` / `APP_GID` | `10001` / `10001` | 容器数值身份，须匹配数据和密钥文件权限。Numeric container identity; match data and secret ownership. |
-| `NODE_IMAGE` | `node:24-alpine` | 构建基础镜像；使用兼容的官方 Alpine Node 镜像，可固定 digest。Build base; use a compatible official Alpine Node image, optionally pinned by digest. |
+| `OPENTYG_VERSION` | `1.2.1` | 拉取的公开镜像版本；建议固定 Release，`latest` 跟随稳定版。Public image version; pin a release, or use `latest` for the current stable image. |
+| `NODE_IMAGE` | `node:24-alpine` | 仅用于 `docker-compose.build.yml` 源码构建覆盖文件。构建基础镜像；使用兼容的官方 Alpine Node 镜像，可固定 digest。Only used by the source-build override `docker-compose.build.yml`. Build base; use a compatible official Alpine Node image, optionally pinned by digest. |
 | `TYG_ORIGIN` | `http://lxj.taoyuangu.com:80` | 平台初始化入口；地址改变可能使保存的登录失效。Platform bootstrap origin; changing it can invalidate saved login state. |
 | `UPSTREAM_ALLOWED_HOSTS` | `lxj.taoyuangu.com,uums.taoyuangu.com,sso.taoyuangu.com` | 逗号分隔的精确主机名，不支持通配符、协议或端口。Comma-separated exact hostnames; no wildcards, schemes, or ports. |
 | `ALLOW_INSECURE_UPSTREAM` | `1` | 允许名单内 HTTP/WS。设 `0` 要求 HTTPS/WSS。Allow HTTP/WS on listed hosts; `0` requires HTTPS/WSS. |

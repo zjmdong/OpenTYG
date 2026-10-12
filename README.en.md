@@ -59,11 +59,23 @@ For your own clients, see the [opentyg-sdk branch](https://github.com/zjmdong/Op
 
 ## Quick start
 
-These commands target a Linux host with Docker Engine, the Compose plugin, Git, and OpenSSL. See the [deployment guide](docs/deployment.en.md) for complete instructions and alternatives.
+Public images support **amd64 / arm64**, with no source download or GitHub login required. Pin a release version:
 
 ```sh
-git clone https://github.com/zjmdong/OpenTYG.git
+docker pull ghcr.io/zjmdong/opentyg:1.2.1
+```
+
+[Container package](https://github.com/zjmdong/OpenTYG/pkgs/container/opentyg) · [Deployment-only bundle](https://github.com/zjmdong/OpenTYG/releases/download/v1.2.1/OpenTYG-deploy-v1.2.1.zip). Images contain no user data or secrets; configure an HTTPS origin, persistent storage, and a separate secret before starting.
+
+These commands target a Linux host with Docker Engine, the Compose plugin, OpenSSL, curl, and unzip. See the [deployment guide](docs/deployment.en.md) for complete instructions and alternatives.
+
+```sh
+mkdir -p OpenTYG
 cd OpenTYG
+curl -fL -o OpenTYG-deploy-v1.2.1.zip https://github.com/zjmdong/OpenTYG/releases/download/v1.2.1/OpenTYG-deploy-v1.2.1.zip
+curl -fL -o DEPLOY-SHA256SUMS.txt https://github.com/zjmdong/OpenTYG/releases/download/v1.2.1/DEPLOY-SHA256SUMS.txt
+sha256sum -c DEPLOY-SHA256SUMS.txt
+unzip OpenTYG-deploy-v1.2.1.zip
 cp .env.example .env
 ```
 
@@ -77,7 +89,8 @@ mkdir -p data secrets
 sudo chown -R 10001:10001 data secrets
 sudo chmod 700 data secrets
 sudo chmod 600 secrets/opentyg_secret.txt
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 curl -fsS http://127.0.0.1:8080/api/health
 ```
 

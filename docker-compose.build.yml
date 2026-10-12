@@ -1,0 +1,9 @@
+# Optional override for contributors building from a full source checkout.
+# docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+services:
+  opentyg:
+    image: opentyg:local
+    build:
+      context: .
+      args:
+        NODE_IMAGE: ${NODE_IMAGE:-node:24-alpine}

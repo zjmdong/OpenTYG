@@ -9,7 +9,7 @@
 需要：
 
 - Docker Engine 及 Compose 插件，能够运行 Linux 容器。建议使用受支持的最新稳定版。
-- Git、OpenSSL 和 curl。
+- OpenSSL、curl、unzip 和 sha256sum。
 - 一个域名，以及能自动续期的受信任 TLS 证书。
 - 有效桃园谷账号，以及该账号已有的房产和门禁权限。
 - 主机能够连接配置的官方 HTTP／HTTPS 和 WebSocket 上游。
@@ -19,21 +19,26 @@
 ```sh
 docker version
 docker compose version
-git --version
 openssl version
 ```
 
 如果当前用户没有 Docker 权限，按系统的 Docker 安装说明处理，或在 Docker 命令前使用 `sudo`。Docker 管理权限应仅授予可信任的管理员。
 
-## 2. 下载代码
+## 2. 下载部署配置
 
 ```sh
-git clone https://github.com/zjmdong/OpenTYG.git
+mkdir -p OpenTYG
 cd OpenTYG
+curl -fL -o OpenTYG-deploy-v1.2.1.zip https://github.com/zjmdong/OpenTYG/releases/download/v1.2.1/OpenTYG-deploy-v1.2.1.zip
+curl -fL -o DEPLOY-SHA256SUMS.txt https://github.com/zjmdong/OpenTYG/releases/download/v1.2.1/DEPLOY-SHA256SUMS.txt
+sha256sum -c DEPLOY-SHA256SUMS.txt
+unzip OpenTYG-deploy-v1.2.1.zip
 cp .env.example .env
 ```
 
 选择一个长期保留的目录。`data/` 与 `secrets/` 会在此保存，不应放在自动清理的临时目录中。
+
+配置包只包含 Compose、配置模板、反向代理示例、部署说明和许可证，没有应用源码、账号、数据或密钥。若 SHA256 校验失败，请重新下载，不要继续使用损坏的文件。也可在浏览器中下载 Release 附件并解压。
 
 ## 3. 编辑配置
 
@@ -82,11 +87,12 @@ sudo chmod 600 secrets/opentyg_secret.txt
 
 容器不会自动继承当前终端用户。删除 Compose 的 `user` 行会回退到镜像内的 `10001:10001`。应用代码在镜像构建时统一设置为可读取；只有 `data/` 需要写入权限，密钥只需读取。不要使用 `chmod -R 777` 或为了绕过权限而用 root 运行应用。使用 ACL 的主机还需确认父目录及共享目录的访问规则。
 
-## 6. 构建并启动
+## 6. 拉取镜像并启动
 
 ```sh
 docker compose config --quiet
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 docker compose ps
 docker compose logs --tail=50 opentyg
 curl -fsS http://127.0.0.1:8080/api/health
@@ -94,7 +100,7 @@ curl -fsS http://127.0.0.1:8080/api/health
 
 如果修改了绑定地址或端口，调整 curl 地址。健康接口返回 `ok: true`、`status: "ok"`。健康检查验证本地服务及已知存储错误，不能证明平台可用或物理门锁正常。
 
-首次构建需要下载基础镜像。此项目从源码构建本地镜像，没有要求从第三方镜像仓库下载 OpenTYG 镜像。默认镜像以非 root 用户运行，根文件系统只读，持久数据挂载到 `/data`。
+预构建镜像来自本项目的公开 GitHub Container Registry：`ghcr.io/zjmdong/opentyg:1.2.1`，支持 `linux/amd64` 和 `linux/arm64`；Docker 会自动选择主机对应架构，无需 GitHub 登录，也无需下载源码或本地构建。默认镜像以非 root 用户运行，根文件系统只读，持久数据挂载到 `/data`。
 
 ## 7. 配置 HTTPS 反向代理
 
@@ -167,27 +173,27 @@ docker compose stop
 docker compose start
 ```
 
-若备份失败，排查原因并恢复服务启动。归档放在项目外，仍包含敏感数据和密钥，应再加密并存放在受控的独立位置，不要上传到 GitHub。记录备份对应的代码提交，并定期验证恢复。
+若备份失败，排查原因并恢复服务启动。归档放在项目外，仍包含敏感数据和密钥，应再加密并存放在受控的独立位置，不要上传到 GitHub。记录备份对应的镜像版本和 digest，并定期验证恢复。
 
-恢复时先停止服务，在目标目录恢复整套文件，设置与 `APP_UID:APP_GID` 一致的所有者及受限权限，使用匹配的代码版本启动，检查健康和登录恢复。不要仅复制 `users/`、漏掉隐藏文件或换掉外部秘密。这里没有自动密钥轮换工具；需要轮换时应先规划重新加密迁移。
+恢复时先停止服务，在目标目录恢复整套文件，设置与 `APP_UID:APP_GID` 一致的所有者及受限权限，使用匹配的镜像版本启动，检查健康和登录恢复。不要仅复制 `users/`、漏掉隐藏文件或换掉外部秘密。这里没有自动密钥轮换工具；需要轮换时应先规划重新加密迁移。
 
 ## 11. 升级
 
-先按上一节备份，确认发布内容和运行要求，再执行：
+先按上一节备份，确认发布内容和运行要求。在 `.env` 中将 `OPENTYG_VERSION` 改为目标 Release 的版本号，再执行：
 
 ```sh
-git pull --ff-only origin main
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 docker compose ps
 ```
 
-检查 HTTPS 页面、记住的登录、偏好和连接恢复。`.env`、`data/`、`secrets/` 被 Git 忽略，升级时保留；不要再次运行首次密钥生成步骤。若要回滚，先确认数据格式兼容，必要时恢复配套备份。
+检查 HTTPS 页面、记住的登录、偏好和连接恢复。升级时保留 `.env`、`data/`、`secrets/` 和现有密钥；不要再次运行首次密钥生成步骤。若要回滚，先确认数据格式兼容，必要时恢复配套备份。
 
 ## 12. 常见问题
 
 | 现象 | 检查方法 |
 | --- | --- |
-| `EACCES` 或反复重启 | 检查 UID/GID、密钥可读、data 可写及主机 ACL；源码应使用更新后 Dockerfile 重新构建 |
+| `EACCES` 或反复重启 | 检查 UID/GID、密钥可读、data 可写及主机 ACL；确认使用当前发布镜像 |
 | `APP_SECRET_MISMATCH` / `DATA_KEY_MISSING` | 恢复原始密钥和完整 data，不要生成新密钥覆盖 |
 | 页面或登录返回 403 | 对照 `PUBLIC_ORIGIN`、外部 Host/端口、Origin 及代理是否改写请求头 |
 | HTTPS 页面显示 502 | 检查容器健康、代理目标、Docker 网络、监听地址和端口 |
@@ -198,3 +204,17 @@ docker compose ps
 | 离线无法开门 | 恢复网络；应用不会离线存储或排队开门请求 |
 
 排障可查看 `docker compose logs --tail=100 opentyg`，分享日志前再检查敏感内容。健康接口成功只表示本地服务正常，不代表上游或门锁正常。
+
+## 13. 镜像版本与源码构建
+
+`1.2.1` 是固定应用版本；`latest` 跟随以后发布的稳定版，生产环境建议显式设置版本。可通过 `docker image inspect ghcr.io/zjmdong/opentyg:1.2.1 --format '{{json .RepoDigests}}'` 记录本地拉取的 digest，或在 Compose 的 `image` 中使用 `ghcr.io/zjmdong/opentyg@sha256:实际digest` 固定内容。
+
+从以前的源码部署迁移时，先停止并备份，将 Compose 改为镜像拉取版，再拉取启动；保留原有 `.env`、`data/`、`secrets/` 和 UID/GID。同一数据目录只允许一个实例运行。
+
+贡献者也可以下载完整源码，在仓库根目录运行：
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+```
+
+源码构建使用可选覆盖文件；仅部署配置包不包含构建所需源码。发布流程从指定版本标签构建，在两种原生架构上检查启动和健康后推送 GHCR。SDK 分支不发布应用容器。

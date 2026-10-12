@@ -6,26 +6,31 @@ This guide uses a Linux host, Docker Compose, and an HTTPS reverse proxy. It app
 
 ## 1. Prerequisites
 
-Prepare Docker Engine with the Compose plugin and Linux container support, Git, OpenSSL, curl, a domain, and a trusted TLS certificate with renewal configured. Use a supported current Docker release. You also need an existing Taoyuangu account with valid property and door permissions, and outbound access to the configured platform HTTP/HTTPS and WebSocket services.
+Prepare Docker Engine with the Compose plugin and Linux container support, OpenSSL, curl, unzip, sha256sum, a domain, and a trusted TLS certificate with renewal configured. Use a supported current Docker release. You also need an existing Taoyuangu account with valid property and door permissions, and outbound access to the configured platform HTTP/HTTPS and WebSocket services.
 
 ```sh
 docker version
 docker compose version
-git --version
 openssl version
 ```
 
 If your user cannot manage Docker, follow your operating system's Docker setup instructions or prefix Docker commands with `sudo`. Grant Docker administration privileges only to trusted administrators.
 
-## 2. Download the source
+## 2. Download deployment files
 
 ```sh
-git clone https://github.com/zjmdong/OpenTYG.git
+mkdir -p OpenTYG
 cd OpenTYG
+curl -fL -o OpenTYG-deploy-v1.2.1.zip https://github.com/zjmdong/OpenTYG/releases/download/v1.2.1/OpenTYG-deploy-v1.2.1.zip
+curl -fL -o DEPLOY-SHA256SUMS.txt https://github.com/zjmdong/OpenTYG/releases/download/v1.2.1/DEPLOY-SHA256SUMS.txt
+sha256sum -c DEPLOY-SHA256SUMS.txt
+unzip OpenTYG-deploy-v1.2.1.zip
 cp .env.example .env
 ```
 
 Use a permanent directory, since persistent data and secrets will live here. Avoid automatically cleaned temporary directories.
+
+The bundle contains Compose configuration, an environment template, a reverse-proxy example, deployment instructions, and licensing files. It contains no application source, accounts, user data, or secrets. If SHA256 verification fails, download again before continuing. You can also download and extract the Release attachment in a browser.
 
 ## 3. Configure the application
 
@@ -74,11 +79,12 @@ To run under your own host user's numeric identity, read it with `id -u` and `id
 
 Containers do not inherit the terminal user's identity. Removing the Compose `user` line falls back to the image's `10001:10001`. Public application files are made readable during image construction; only `data/` needs write access, and the secret needs read access. Avoid `chmod -R 777` or running the application as root to bypass permission errors. On ACL-managed hosts, also check parent directory and share access rules.
 
-## 6. Build and start
+## 6. Pull and start
 
 ```sh
 docker compose config --quiet
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 docker compose ps
 docker compose logs --tail=50 opentyg
 curl -fsS http://127.0.0.1:8080/api/health
@@ -86,7 +92,7 @@ curl -fsS http://127.0.0.1:8080/api/health
 
 Adjust the curl address if you changed the binding or port. A healthy response contains `ok: true` and `status: "ok"`. The probe checks the local service and known storage failures; it does not verify platform availability or a physical lock.
 
-The first build downloads the base image. OpenTYG is built locally from source; no third-party OpenTYG image is required. The container defaults to a non-root identity, a read-only root filesystem, and persistent storage mounted at `/data`.
+Prebuilt images are published in this project’s public GitHub Container Registry as `ghcr.io/zjmdong/opentyg:1.2.1`, supporting `linux/amd64` and `linux/arm64`. Docker selects the matching architecture. No GitHub login, source checkout, or local build is required. The container defaults to a non-root identity, a read-only root filesystem, and persistent storage mounted at `/data`.
 
 ## 7. Configure HTTPS
 
@@ -157,27 +163,27 @@ docker compose stop
 docker compose start
 ```
 
-If backup fails, investigate and restart the service. The archive lives outside the project but still contains private data and key material. Encrypt it separately, store it in a restricted independent location, and never upload it to GitHub. Record the corresponding code commit and periodically verify restoration.
+If backup fails, investigate and restart the service. The archive lives outside the project but still contains private data and key material. Encrypt it separately, store it in a restricted independent location, and never upload it to GitHub. Record the corresponding image version and digest and periodically verify restoration.
 
-To restore, stop the service, restore the complete set, fix ownership and restricted permissions to match `APP_UID:APP_GID`, and start a matching code version. Check health and login restoration. Do not restore only `users/`, omit hidden files, or replace the external secret. No automated key-rotation tool is included; rotation requires a planned re-encryption migration.
+To restore, stop the service, restore the complete set, fix ownership and restricted permissions to match `APP_UID:APP_GID`, and start a matching image version. Check health and login restoration. Do not restore only `users/`, omit hidden files, or replace the external secret. No automated key-rotation tool is included; rotation requires a planned re-encryption migration.
 
 ## 11. Upgrade
 
-Back up first, review the changes and runtime requirements, then run:
+Back up first and review the release and runtime requirements. Set `OPENTYG_VERSION` in `.env` to the target release version, then run:
 
 ```sh
-git pull --ff-only origin main
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 docker compose ps
 ```
 
-Verify the HTTPS page, remembered login, preferences, and connection recovery. Preserve the Git-ignored `.env`, `data/`, and `secrets/`. Do not repeat initial secret generation. Before rolling back, confirm storage-format compatibility or restore a matching backup.
+Verify the HTTPS page, remembered login, preferences, and connection recovery. Preserve `.env`, `data/`, `secrets/`, and the original secret. Do not repeat initial secret generation. Before rolling back, confirm storage-format compatibility or restore a matching backup.
 
 ## 12. Troubleshooting
 
 | Symptom | Check |
 | --- | --- |
-| `EACCES` or restart loop | UID/GID, readable secret, writable data, host ACLs, and rebuilding with the current Dockerfile |
+| `EACCES` or restart loop | UID/GID, readable secret, writable data, host ACLs, and using the current published image |
 | `APP_SECRET_MISMATCH` / `DATA_KEY_MISSING` | Restore original keys and the complete data directory; do not overwrite with new keys |
 | Page or login returns 403 | Exact `PUBLIC_ORIGIN`, external Host/port, Origin, and proxy header rewriting |
 | HTTPS page returns 502 | Container health, proxy target, Docker network, binding, and port |
@@ -188,3 +194,17 @@ Verify the HTTPS page, remembered login, preferences, and connection recovery. P
 | Cannot open a door offline | Reconnect; the application never stores or queues offline commands |
 
 Inspect `docker compose logs --tail=100 opentyg` when needed and review logs for sensitive content before sharing. A successful local health probe does not establish upstream or lock health.
+
+## 13. Image versions and source builds
+
+`1.2.1` selects a release; `latest` follows future stable releases. Pin a version in production. Record the downloaded digest with `docker image inspect ghcr.io/zjmdong/opentyg:1.2.1 --format '{{json .RepoDigests}}'`, or use `ghcr.io/zjmdong/opentyg@sha256:actual-digest` in Compose to pin content.
+
+To migrate an existing source-built deployment, stop and back up first, replace Compose with the image-based configuration, then pull and start. Preserve the original `.env`, `data/`, `secrets/`, and UID/GID. Only one instance may access a data directory.
+
+Contributors may clone the full repository and run from its root:
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+```
+
+The optional override builds locally; the deployment-only bundle has no build sources. The publication workflow builds from a release tag and checks startup and health on both native architectures before pushing to GHCR. The SDK branch does not publish an application container.
