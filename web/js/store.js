@@ -4,6 +4,7 @@
  */
 
 import { api, setDirectoryContext } from './api.js';
+import { withConnectionProgress } from './connectionProgress.js';
 
 const DEFAULT_MAX_FAVORITES = 5;
 const DEFAULT_COOLDOWN_MS = 3000;
@@ -218,7 +219,7 @@ export function loadDoors(refresh = false, { silent = false } = {}) {
     store.notify();
   }
 
-  const request = api.getDoors(refresh)
+  const request = withConnectionProgress('connecting', () => api.getDoors(refresh))
     .then((data) => {
       if (currentGeneration === generation && state.authenticated) store.setDoors(data);
       return data;

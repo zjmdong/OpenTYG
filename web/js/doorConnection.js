@@ -13,7 +13,7 @@ export async function warmDoorConnection() {
   // visibilitychange, pageshow and online can describe the same foreground entry.
   if (Date.now() - lastWarmupAt < 2000) return;
   lastWarmupAt = Date.now();
-  try { await loadDoors(true, { silent: store.state.doors.length > 0 }); }
+  try { await loadDoors(false, { silent: store.state.doors.length > 0 }); }
   catch (error) {
     // Background preparation must not show a success/error dialog or log secrets.
     console.warn('[opentyg] 门禁连接预热未完成', error.code || 'NETWORK_ERROR');

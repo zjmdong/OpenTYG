@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Published application release tag (for example v1.2.1)'
+        description: 'Published application release tag (for example v1.2.2)'
         required: true
-        default: v1.2.1
+        default: v1.2.2
       operation:
         description: 'Publish an image, or verify anonymous pulls after making it public'
         required: true

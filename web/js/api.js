@@ -49,7 +49,7 @@ async function request(path, options = {}) {
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
     throw new ApiError('NETWORK_ERROR', '当前处于离线状态，请联网后重试', {}, 0);
   }
-  const { method = 'GET', body, query } = options;
+  const { method = 'GET', body, query, timeoutMs = 45_000, unauthorized = true } = options;
   const headers = { Accept: 'application/json' };
   if (method !== 'GET') headers['X-OpenTYG-Request'] = '1';
   if (body !== undefined) headers['Content-Type'] = 'application/json; charset=utf-8';
@@ -61,23 +61,24 @@ async function request(path, options = {}) {
       headers,
       credentials: 'include',
       cache: 'no-store',
-      signal: AbortSignal.timeout(45_000),
+      signal: AbortSignal.timeout(timeoutMs),
       body: body === undefined ? undefined : JSON.stringify(path.startsWith('/api/doors/') ? { ...directoryContext(), ...body } : body),
     });
   } catch (cause) {
-    throw new ApiError(cause.name === 'TimeoutError' ? 'REQUEST_TIMEOUT' : 'NETWORK_ERROR', '未收到服务器响应，请检查网络', {}, 0);
+    throw new ApiError(['TimeoutError','AbortError'].includes(cause.name) ? 'REQUEST_TIMEOUT' : 'NETWORK_ERROR', '未收到服务器响应，请检查网络', {}, 0);
   }
 
   let payload = null;
   let text = '';
-  try { text = await res.text(); } catch { text = ''; }
+  try { text = await res.text(); }
+  catch (cause) { throw new ApiError(['TimeoutError','AbortError'].includes(cause.name) ? 'REQUEST_TIMEOUT' : 'NETWORK_ERROR', '接收响应超时或连接中断，请重试', {}, 0); }
   if (text) {
     try { payload = JSON.parse(text); } catch { payload = null; }
   }
 
   if (!payload || typeof payload !== 'object') {
     if (res.status === 401) {
-      fireUnauthorized();
+      if (unauthorized) fireUnauthorized();
       throw new ApiError('NOT_LOGGED_IN', '登录状态已失效，请重新登录', {}, 401);
     }
     throw new ApiError('BAD_RESPONSE', `服务器返回异常（HTTP ${res.status}）`, {}, res.status);
@@ -89,17 +90,19 @@ async function request(path, options = {}) {
   const code = error.code || (res.status === 401 ? 'NOT_LOGGED_IN' : 'UNKNOWN');
   const message = error.message || `请求失败（HTTP ${res.status}）`;
 
-  if (SESSION_CODES.has(code) || code === 'SAVED_LOGIN_INVALID') fireUnauthorized();
+  if (unauthorized && (SESSION_CODES.has(code) || code === 'SAVED_LOGIN_INVALID')) fireUnauthorized();
 
   throw new ApiError(code, message, error.details, res.status);
 }
 
 export const api = {
   /* ---- 基础 ---- */
-  getMeta: () => request('/api/meta'),
+  getMeta: () => request('/api/meta', { timeoutMs: 8000 }),
 
   /* ---- 认证 ---- */
-  getSession: () => request('/api/auth/session'),
+  getSession: () => request('/api/auth/session', { timeoutMs: 16_000 }),
+
+  getConnectionStatus: () => request('/api/connection/status', { timeoutMs: 2000, unauthorized: false }),
 
   /** 图形验证码；refresh=true 表示「换一张」 */
   requestCaptcha: (mobile, refresh = false) =>
@@ -134,7 +137,7 @@ export const api = {
     request('/api/households/select', { method: 'POST', body: { householdId } }),
 
   /* ---- 门禁 ---- */
-  getDoors: (refresh = false) => request('/api/doors', { query: { refresh: refresh ? 1 : 0 } }),
+  getDoors: (refresh = false) => request('/api/doors', { query: { refresh: refresh ? 1 : 0 }, timeoutMs: 16_000 }),
 
   renameDoor: (doorId, name) =>
     request('/api/doors/rename', { method: 'POST', body: { doorId, name } }),

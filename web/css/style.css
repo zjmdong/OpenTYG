@@ -642,6 +642,12 @@ svg { display: block; }
   color: var(--ink-3); font-size: 13px;
 }
 .state-loading .spinner { border-color: var(--accent-line); border-top-color: var(--accent-fg); }
+.connection-progress__steps {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 14px;
+  list-style: none; margin: 0; padding: 0; color: var(--ink-2); font-size: 12px;
+}
+.connection-progress__steps [aria-current="step"] { color: var(--accent-fg); font-weight: 700; }
+.connection-progress__detail { text-align: center; line-height: 1.6; color: var(--ink-2); }
 
 .error-box {
   margin: 24px 20px;

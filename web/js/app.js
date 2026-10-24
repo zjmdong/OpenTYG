@@ -14,6 +14,7 @@ import { initTheme } from './theme.js';
 import { esc, toast } from './ui.js';
 import { initPwa } from './pwa.js';
 import { initDoorConnection, warmDoorConnection } from './doorConnection.js';
+import { connectionLoadingHtml, withConnectionProgress } from './connectionProgress.js';
 
 const view = document.getElementById('view');
 const tabbar = document.getElementById('tabbar');
@@ -30,10 +31,7 @@ const TABS = [
 function renderBoot() {
   view.innerHTML = `
     <div class="page">
-      <div class="state-loading" style="flex:1;justify-content:center">
-        <span class="spinner"></span>
-        <span>正在启动 OpenTYG…</span>
-      </div>
+      ${connectionLoadingHtml()}
     </div>`;
 }
 
@@ -83,7 +81,7 @@ async function boot() {
 
   // 1) meta（无需登录）
   try {
-    const meta = await api.getMeta();
+    const meta = await withConnectionProgress('service', () => api.getMeta());
     store.setMeta(meta);
   } catch (err) {
     console.error('[opentyg] /api/meta 失败', err);
@@ -93,10 +91,10 @@ async function boot() {
 
   // 2) 会话恢复
   try {
-    const session = await api.getSession();
+    const session = await withConnectionProgress('restoring', () => api.getSession());
     store.applySession(session);
   } catch (err) {
-    if (err && err.code === 'NETWORK_ERROR') {
+    if (!['SESSION_EXPIRED','SAVED_LOGIN_INVALID','NOT_LOGGED_IN'].includes(err?.code)) {
       console.error('[opentyg] /api/auth/session 失败', err);
       renderFatal(err);
       return;
@@ -112,9 +110,10 @@ async function boot() {
     navigate('/login', { replace: true });
   });
 
-  // Prepare before mounting a page so its initial API read cannot race warmup.
+  // Start preparation before mounting (loadDoors coalesces the page's read),
+  // but render the home/navigation immediately instead of blocking behind WS.
   initDoorConnection();
-  await warmDoorConnection();
+  void warmDoorConnection();
 
   // 4) 路由
   startRouter({

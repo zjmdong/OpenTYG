@@ -1,6 +1,6 @@
 services:
   opentyg:
-    image: ghcr.io/zjmdong/opentyg:${OPENTYG_VERSION:-1.2.1}
+    image: ghcr.io/zjmdong/opentyg:${OPENTYG_VERSION:-1.2.2}
     container_name: opentyg
     restart: unless-stopped
     init: true

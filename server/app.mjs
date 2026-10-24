@@ -21,7 +21,7 @@ import { SessionRegistry, clearSessionCookie, readSessionCookie, setSessionCooki
 
 const HERE = fileURLToPath(new URL('.', import.meta.url));
 const WEB_ROOT = resolve(HERE, '../web');
-const APP_VERSION = '1.2.1';
+const APP_VERSION = '1.2.2';
 const MAX_BODY_BYTES = 64 * 1024;
 const MAX_NAME_LENGTH = 20;
 const DEFAULT_COOLDOWN_MS = 3000;
@@ -315,6 +315,7 @@ export async function createApp({
   }
 
   async function route(req, res, url) {
+    const requestStartedAt = Date.now();
     const method = req.method || 'GET';
     const path = url.pathname;
     const { readJson, string, send, secure } = makeHelpers(req, res);
@@ -463,6 +464,13 @@ export async function createApp({
     }
 
     // ------------------------------------------------------------- 认证路由
+
+    if (path === '/api/connection/status' && method === 'GET') {
+      if (!entry?.uid) throw fail('SESSION_EXPIRED');
+      const progress = pool.get(entry.uid)?.progress;
+      send({ phase: progress?.phase || 'idle', step: progress?.step || 1, elapsedMs: progress?.startedAt ? Math.max(0, Date.now() - progress.startedAt) : 0 });
+      return;
+    }
 
     if (path === '/api/auth/session' && method === 'GET') {
       if (!entry?.uid) {
@@ -663,10 +671,12 @@ export async function createApp({
       const householdId = prefsValue.selectedHouseholdId || session.selectedHouseholdId;
       if (!householdId) throw fail('HOUSEHOLD_NOT_SELECTED');
       const refresh = url.searchParams.get('refresh') === '1';
-      const stale = refresh || !session.connected() || session.selectedHouseholdId !== householdId || !session.directoryId || session.doors.length === 0;
+      const stale = refresh || session.needsPreparation(householdId);
       if (stale) {
         session.household(householdId);
-        await oneAtATime(session, () => session.loadDirectory(householdId));
+        const remainingMs = 15_000 - (Date.now() - requestStartedAt);
+        if (remainingMs <= 0) throw fail('HTTP_TIMEOUT');
+        await oneAtATime(session, () => session.loadDirectory(householdId, { timeoutMs: remainingMs }));
       }
       const doors = buildDoors(session.doors, prefsValue, householdId);
       const bucket = householdPrefs(prefsValue, householdId);
@@ -765,6 +775,9 @@ export async function createApp({
 
   const routeUnlocked = route;
   async function routeGuarded(req, res, url) {
+    // Cookie-checked, read-only progress must remain available while the user
+    // lock protects the actual restore/configuration operation.
+    if (req.method === 'GET' && url.pathname === '/api/connection/status') return routeUnlocked(req, res, url);
     const id = readSessionCookie(req, secret);
     const uid = id && registry.entries.get(id)?.uid;
     if (uid && userLocks.has(uid)) throw fail('BUSY');

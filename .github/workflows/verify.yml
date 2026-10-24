@@ -68,7 +68,7 @@ jobs:
           secret_file="$install_dir/secrets/opentyg_secret.txt"
           held_key="$RUNNER_TEMP/opentyg-held-key"
           trap 'if [[ -f "$held_key" ]]; then sudo mv -- "$held_key" "$secret_file"; fi; docker rm -f opentyg >/dev/null 2>&1 || true' EXIT
-          printf '%s\n' "$install_dir" "$data_dir" '' 'https://opentyg.example.com:8443' 1 8088 '' '' '' | sudo bash install.sh --lang=en
+          printf '%s\n' "$install_dir" "$data_dir" '' 'https://opentyg.example.com:8443' 1 8088 1.2.1 '' '' | sudo bash install.sh --lang=en
           test ! -f "$install_dir/.env"
           test "$(docker inspect --format '{{.Config.User}}' opentyg)" = "$(id -u):$(id -g)"
           test "$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Source}}{{end}}{{end}}' opentyg)" = "$data_dir"
@@ -80,7 +80,7 @@ jobs:
           data_key_hash=$(docker exec opentyg node --input-type=module -e "$data_key_probe")
           printf '%s\n' "$install_dir" 1 | sudo bash install.sh --lang=en
           test "$(sha256sum "$secret_file")" = "$secret_hash"
-          printf '%s\n' "$install_dir" 2 "$data_dir" '' 'https://opentyg.example.com:8443' 1 8089 '' '' '' | sudo bash install.sh --lang=en
+          printf '%s\n' "$install_dir" 2 "$data_dir" '' 'https://opentyg.example.com:8443' 1 8089 1.2.1 '' '' | sudo bash install.sh --lang=en
           test "$(sha256sum "$secret_file")" = "$secret_hash"
           test "$(docker exec opentyg node --input-type=module -e "$data_key_probe")" = "$data_key_hash"
           compgen -G "$install_dir/docker-compose.yml.*.bak" >/dev/null

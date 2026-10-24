@@ -196,7 +196,10 @@ export class TygClient {
     deviceUniqueId = '', lastLoginDeviceToken = '', httpTimeoutMs = 30000,
     connectTimeoutMs = 10000, configTimeoutMs = 15000, openTimeoutMs = 5000,
     openCooldownMs = 3000, fetchImpl = globalThis.fetch,
-    allowInsecureTransport = false, allowedHosts = [], retainIntercomPassword = false } = {}) {
+    allowInsecureTransport = false, allowedHosts = [], retainIntercomPassword = false,
+    readTimeoutMs = httpTimeoutMs, readAttempts = 1, onProgress = null } = {}) {
+    this.readTimeoutMs = readTimeoutMs; this.readAttempts = readAttempts;
+    this.onProgress = onProgress; this.preparationSignal = null;
     const url = new URL(origin);
     if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) throw new TygError('INVALID_ORIGIN', '服务入口必须是 HTTP/HTTPS URL');
     this.origin = url.origin;
@@ -244,6 +247,7 @@ export class TygClient {
   }
   async measure(operation, action) {
     const started = performance.now(); let errorCode = null;
+    this.onProgress?.(operation);
     try { return await action(); }
     catch (error) { errorCode = error.code || 'ERROR'; throw error; }
     finally {
@@ -256,20 +260,31 @@ export class TygClient {
     const service = route.split('/')[1];
     const url = new URL(route, this.serviceBase(service)); // 原 Retrofit 的路径以 / 开头。
     this.validateUrl(url);
-    let response;
-    try {
-      response = await this.fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json; charset=UTF-8', Accept: 'application/json' },
-        body: JSON.stringify(envelope(body, token, Date.now(), this.timeZone)), redirect: 'error', signal: AbortSignal.timeout(this.httpTimeoutMs) });
-    } catch (e) {
-      throw new TygError(e.name === 'TimeoutError' ? 'HTTP_TIMEOUT' : 'HTTP_ERROR', '原服务请求失败，请检查网络和服务入口', {}, 502);
+    // These POST endpoints only read configuration/permissions. Login, SMS and
+    // logout are deliberately excluded. The timeout also covers the response body.
+    const readOnly = [ROUTES.initialize, ROUTES.households, ROUTES.doorAuth].includes(route);
+    const attempts = readOnly ? this.readAttempts : 1;
+    const preparationSignal = readOnly ? this.preparationSignal : null;
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      try {
+        preparationSignal?.throwIfAborted();
+        const timeout = AbortSignal.timeout(readOnly ? this.readTimeoutMs : this.httpTimeoutMs);
+        const response = await this.fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json; charset=UTF-8', Accept: 'application/json', ...(readOnly ? { Connection: 'close' } : {}) },
+          body: JSON.stringify(envelope(body, token, Date.now(), this.timeZone)), redirect: 'error',
+          signal: preparationSignal ? AbortSignal.any([timeout, preparationSignal]) : timeout });
+        if (!response.ok) { await response.body?.cancel(); throw new TygError('HTTP_STATUS', `原服务返回 HTTP ${response.status}`, { httpStatus: response.status }, 502); }
+        const bytes = await this.readBounded(response);
+        if (this.closed) throw new TygError('CLIENT_CLOSED', '会话已关闭', {}, 410);
+        let data;
+        try { data = JSON.parse(bytes.toString('utf8')); if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error(); }
+        catch { throw new TygError('PROTOCOL_ERROR', '原服务未返回 JSON 对象', {}, 502); }
+        return data;
+      } catch (error) {
+        const wrapped = error instanceof TygError ? error : new TygError(['TimeoutError','AbortError'].includes(error.name) ? 'HTTP_TIMEOUT' : 'HTTP_ERROR', '原服务请求失败，请检查网络和服务入口', {}, 502);
+        if (attempt + 1 === attempts || preparationSignal?.aborted || this.closed || !['HTTP_TIMEOUT','HTTP_ERROR'].includes(wrapped.code)) throw wrapped;
+        this.onProgress?.('retrying');
+      }
     }
-    if (!response.ok) throw new TygError('HTTP_STATUS', `原服务返回 HTTP ${response.status}`, { httpStatus: response.status }, 502);
-    if (this.closed) throw new TygError('CLIENT_CLOSED', '会话已关闭', {}, 410);
-    try {
-      const data = JSON.parse((await this.readBounded(response)).toString('utf8'));
-      if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error();
-      return data;
-    } catch { throw new TygError('PROTOCOL_ERROR', '原服务未返回 JSON 对象', {}, 502); }
     });
   }
   assertInitialized() { if (!this.initialized) throw new TygError('NOT_INITIALIZED', '请先加载原 APP 的服务配置', {}, 409); }

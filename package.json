@@ -1,6 +1,6 @@
 {
   "name": "opentyg",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "private": true,
   "description": "A self-hosted, mobile-first web client for authorized Taoyuangu door access.",
   "type": "module",

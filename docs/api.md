@@ -85,3 +85,13 @@ Rate-limit errors expose remaining seconds in `error.details.retryAfterSeconds` 
 **开门请求发出后，网络失败、超时或无法解析回执都应视为结果未知。没有响应不证明命令没有执行。不要自动重发、离线缓存或后台队列开门请求。**
 
 **After dispatch, a network failure, timeout, or unparseable acknowledgment means an unknown result. No response does not prove the command was not executed. Never automatically retry, cache offline, or queue door commands in the background.**
+
+## 连接进度 / Connection progress
+
+`GET /api/connection/status` requires a valid signed session cookie and returns only `{ phase, step, elapsedMs }`. It remains readable while another request restores the same user's connection. It never starts platform operations or returns credentials, account details, or door commands.
+
+有效会话可在加载期间读取此接口：`phase` 为 `idle`、`restoring`、`connecting`、`directory`、`retrying`、`ready` 或 `failed`；`step` 对应恢复登录、连接门禁、获取列表，`elapsedMs` 为本次准备耗时。状态轮询不延长会话的绝对有效期。
+
+`GET /api/doors` reuses a connected directory for up to 60 seconds, then prepares a fresh authenticated directory. `refresh=1` still forces preparation. Read-only platform requests can retry once after a network error or timeout; SMS, login, logout and OpenDoor commands are never automatically retried by this mechanism.
+
+恢复登录和准备目录各有约 12 秒的网络等待预算；一次 `/api/doors` 请求中需要先恢复登录时，目录准备共用剩余的约 15 秒预算。超时保留记住的凭据并允许用户重试，不把临时网络异常当作退出登录。浏览器显示实际阶段和已等待秒数，不承诺上游的预计完成时间。

@@ -10,6 +10,7 @@ import { store, loadDoors } from '../store.js';
 import { openDoor } from '../open.js';
 import { openDoorSheet } from '../doorSheet.js';
 import { api } from '../api.js';
+import { connectionLoadingHtml } from '../connectionProgress.js';
 import { ICON } from '../icons.js';
 import { esc, toast, bindLongPress, guard } from '../ui.js';
 
@@ -128,7 +129,7 @@ export default {
 
       if (s.doorsError && !s.doors.length) { bodyEl.innerHTML = errorHtml(s.doorsError); bindStatic(); return; }
       if (s.doorsLoading && !s.doors.length) {
-        bodyEl.innerHTML = '<div class="state-loading"><span class="spinner"></span><span>正在加载门禁列表…</span></div>';
+        bodyEl.innerHTML = connectionLoadingHtml();
         return;
       }
 

@@ -1,7 +1,7 @@
 # Zero runtime dependencies; production defaults fail closed until configured.
 ARG NODE_IMAGE=node:24-alpine
 FROM ${NODE_IMAGE}
-LABEL org.opencontainers.image.title="OpenTYG" org.opencontainers.image.version="1.2.1" \
+LABEL org.opencontainers.image.title="OpenTYG" org.opencontainers.image.version="1.2.2" \
       org.opencontainers.image.source="https://github.com/zjmdong/OpenTYG" \
       org.opencontainers.image.licenses="MIT"
 ENV NODE_ENV=production PORT=8787 HOST=0.0.0.0 DATA_DIR=/data LOG_QUIET=0

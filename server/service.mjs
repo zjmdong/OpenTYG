@@ -15,6 +15,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 const IDLE_LIMIT_MS = 30 * 60 * 1000;
 const MAX_SESSIONS = 200;
 const LOGIN_OS = '4'; // 官方 Android 设备类型，与 SDK 默认一致
+const DIRECTORY_FRESH_MS = 60_000;
 // Only connection/configuration reads are retried. Never retry an OpenDoor message.
 const PREPARE_RETRY_CODES = new Set(['WS_CONNECT_TIMEOUT', 'WS_ERROR', 'WS_CLOSED', 'WS_NOT_CONNECTED', 'WS_TIMEOUT', 'HTTP_ERROR', 'HTTP_TIMEOUT']);
 
@@ -34,11 +35,53 @@ export class Session {
     this.lastUsedAt = Date.now();
     this.pending = 0;
     this.restoring = null;
+    this.directoryReadyAt = 0;
+    this.preparing = false;
+    this.progress = { phase: 'idle', startedAt: 0 };
   }
 
   touch() { this.lastUsedAt = Date.now(); }
 
-  authenticated() { return !!this.client?.session; }
+  authenticated() { return !this.restoring && !!this.client?.session; }
+
+  createClient() {
+    return new TygClient({ origin: this.origin, lastLoginOs: LOGIN_OS, deviceUniqueId: this.deviceId,
+      readTimeoutMs: 4000, readAttempts: 2, connectTimeoutMs: 4000, configTimeoutMs: 5000,
+      ...this.transport, onProgress: operation => {
+        if (!this.preparing) return;
+        if (operation === 'retrying') this.progress.phase = 'retrying';
+        else if (operation === 'doorConfig') this.progress.phase = 'directory';
+        else if (['wsConnect','doorAuth'].includes(operation)) this.progress.phase = 'connecting';
+        else if (['initialize','households'].includes(operation)) this.progress.phase = 'restoring';
+        if (operation !== 'retrying') this.progress.step = this.progress.phase === 'directory' ? 3 : this.progress.phase === 'restoring' ? 1 : 2;
+      } });
+  }
+
+  async prepare(phase, action, timeoutMs = 12_000) {
+    const client = this.client;
+    const controller = new AbortController();
+    this.progress = { phase, step: phase === 'restoring' ? 1 : 2, startedAt: Date.now() };
+    this.preparing = true;
+    client.preparationSignal = controller.signal;
+    const timer = setTimeout(() => {
+      controller.abort();
+      client.clearDoor();
+    }, Math.min(this.transport.preparationTimeoutMs || 12_000, timeoutMs));
+    try {
+      const result = await action();
+      controller.signal.throwIfAborted();
+      this.progress.phase = 'ready';
+      return result;
+    } catch (error) {
+      this.progress.phase = 'failed';
+      if (controller.signal.aborted) throw fail('HTTP_TIMEOUT', '连接门禁服务超时，请重试；登录状态已保留');
+      throw error;
+    } finally {
+      clearTimeout(timer);
+      this.preparing = false;
+      client.preparationSignal = null;
+    }
+  }
 
   households() { return this.client ? this.client.households.map(({ token, ...room }) => ({ ...room })) : []; }
 
@@ -47,12 +90,7 @@ export class Session {
 
   ensureClient() {
     if (!this.client) {
-      this.client = new TygClient({
-        origin: this.origin,
-        lastLoginOs: LOGIN_OS,
-        deviceUniqueId: this.deviceId,
-        ...this.transport,
-      });
+      this.client = this.createClient();
     }
     return this.client;
   }
@@ -91,8 +129,8 @@ export class Session {
       if (!previous?.session) throw fail('SAVED_LOGIN_INVALID', '本地没有可恢复的登录状态');
       // 不复用旧 client 实例，避免半恢复状态；deviceUniqueId 保持一致，上游视为同一设备。
       try { this.client?.close(); } catch { /* 已关闭 */ }
-      this.client = new TygClient({ origin: this.origin, lastLoginOs: LOGIN_OS, deviceUniqueId: this.deviceId, ...this.transport });
-      await this.client.restoreLoginSession(Buffer.from(previous.session, 'base64'));
+      this.client = this.createClient();
+      await this.prepare('restoring', () => this.client.restoreLoginSession(Buffer.from(previous.session, 'base64')));
       this.loginAt = previous.loginAt || Date.now();
       this.remembered = previous.remembered !== false;
       return this.client.getState();
@@ -107,6 +145,7 @@ export class Session {
     this.directoryId = null;
     this.doors = [];
     this.doorIndex.clear();
+    this.directoryReadyAt = 0;
   }
 
   household(id) {
@@ -120,30 +159,38 @@ export class Session {
   }
 
   /** 选中房产并加载门禁目录（SDK 内部会取 authcode + 建 WS + 下载配置）。 */
-  async loadDirectory(householdId) {
+  async loadDirectory(householdId, { timeoutMs = 12_000 } = {}) {
     if (!this.client) throw fail('NOT_LOGGED_IN');
     this.directoryId = null; this.selectedHouseholdId = null;
     this.doors = []; this.doorIndex.clear();
     try {
       const client = this.client;
       let directory;
-      for (let attempt = 0; attempt < 2; attempt += 1) {
-        try { directory = await client.getDoors(householdId); break; }
-        catch (error) {
-          if (attempt !== 0 || !PREPARE_RETRY_CODES.has(error?.code)) throw error;
-          await delay(200);
-          if (this.client !== client || client.closed) throw fail('CLIENT_CLOSED');
+      await this.prepare('connecting', async () => {
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          try { directory = await client.getDoors(householdId); break; }
+          catch (error) {
+            if (attempt !== 0 || !PREPARE_RETRY_CODES.has(error?.code)) throw error;
+            await delay(200);
+            client.preparationSignal?.throwIfAborted();
+            this.progress.phase = 'retrying';
+            if (this.client !== client || client.closed) throw fail('CLIENT_CLOSED');
+          }
         }
-      }
+      }, timeoutMs);
       this.selectedHouseholdId = householdId;
       this.directoryId = directory.directoryId;
       this.doors = directory.doors.map(door => ({ ...door }));
       this.doorIndex = new Map(this.doors.map(door => [door.id, door]));
+      this.directoryReadyAt = Date.now();
       return directory;
     } catch (error) {
       if (error?.code === 'HOUSEHOLD_UNAVAILABLE' || error?.code === 'HOUSEHOLD_NOT_FOUND') throw error;
       const wrapped = toAppError(error);
       if (wrapped.code === 'HOUSEHOLD_UNAVAILABLE') throw wrapped;
+      if (['HTTP_TIMEOUT','WS_CONNECT_TIMEOUT','WS_TIMEOUT'].includes(wrapped.code)) {
+        throw new AppError('DOORS_LOAD_FAILED', '门禁连接超时，请点击重试；登录状态已保留', { cause: wrapped.code });
+      }
       throw new AppError('DOORS_LOAD_FAILED', undefined, { cause: wrapped.code });
     }
   }
@@ -156,6 +203,10 @@ export class Session {
 
   connected() { return this.client?.getCredentials().connected === true; }
 
+  needsPreparation(householdId = this.selectedHouseholdId) {
+    return !this.connected() || this.selectedHouseholdId !== householdId || !this.directoryId || !this.doors.length || Date.now() - this.directoryReadyAt >= DIRECTORY_FRESH_MS;
+  }
+
   /** 调用 SDK 开门；返回归一化业务结果。 */
   async openDoor(doorId) {
     if (!this.client) throw fail('NOT_LOGGED_IN');
@@ -165,7 +216,7 @@ export class Session {
     // door id again so a removed/changed door cannot be opened accidentally.
     const householdId = this.selectedHouseholdId;
     this.door(doorId);
-    if (!this.connected()) await this.loadDirectory(householdId);
+    if (this.needsPreparation(householdId)) await this.loadDirectory(householdId);
     const door = this.door(doorId);
     const startedAt = Date.now();
     const result = await this.client.openDoor({ householdId: this.selectedHouseholdId, directoryId: this.directoryId, doorId: door.id });
@@ -229,7 +280,7 @@ export class SessionPool {
   #evictIfNeeded() {
     if (this.sessions.size <= this.maxSessions) return;
     const candidates = [...this.sessions.values()]
-      .filter(session => session.pending === 0)
+      .filter(session => session.pending === 0 && !session.preparing && !session.restoring)
       .sort((a, b) => a.lastUsedAt - b.lastUsedAt);
     for (const session of candidates) {
       if (this.sessions.size <= this.maxSessions) break;
@@ -243,7 +294,7 @@ export class SessionPool {
   sweep(now = Date.now()) {
     let removed = 0;
     for (const [uid, session] of this.sessions) {
-      if (session.pending > 0) continue;
+      if (session.pending > 0 || session.preparing || session.restoring) continue;
       if (now - session.lastUsedAt < this.idleLimitMs) continue;
       session.clearLocal();
       this.sessions.delete(uid);

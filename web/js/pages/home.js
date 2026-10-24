@@ -12,6 +12,7 @@ import { openDoorSheet } from '../doorSheet.js';
 import { ICON } from '../icons.js';
 import { esc, toast, confirmDialog, bindLongPress, guard } from '../ui.js';
 import { api } from '../api.js';
+import { connectionLoadingHtml } from '../connectionProgress.js';
 
 /** 倒计时进度环：SVG 圆周长（r=54 → 2πr ≈ 339.29），用 stroke-dashoffset 平滑推进 */
 const RING_R = 54;
@@ -79,7 +80,7 @@ export default {
     }
 
     function loadingHtml() {
-      return `<div class="state-loading"><span class="spinner"></span><span>正在加载门禁列表…</span></div>`;
+      return connectionLoadingHtml();
     }
 
     function errorHtml(err) {

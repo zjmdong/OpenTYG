@@ -169,9 +169,9 @@ while :; do
   msg '端口范围为 1–65535。' 'Use a port between 1 and 65535.'
 done
 while :; do
-  ask VERSION '镜像版本' 'Image version' 1.2.1
+  ask VERSION '镜像版本' 'Image version' 1.2.2
   [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ || "$VERSION" == latest ]] && break
-  msg '请输入版本号，例如 1.2.1，或 latest。' 'Enter a release version, such as 1.2.1, or latest.'
+  msg '请输入版本号，例如 1.2.2，或 latest。' 'Enter a release version, such as 1.2.2, or latest.'
 done
 default_uid=${SUDO_UID:-$(id -u)}; default_gid=${SUDO_GID:-$(id -g)}
 if [[ "$default_uid" == 0 || "$default_gid" == 0 ]]; then default_uid=10001; default_gid=10001; fi
