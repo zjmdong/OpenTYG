@@ -20,6 +20,7 @@ const state = {
   favorites: [],              // 由 doors 派生：favorite=true 且 priority 1..5
   doorsLoadedAt: 0,
   doorsLoading: false,
+  doorsPreview: false,
   doorsError: null,           // { code, message }
   me: null,                   // GET /api/me
 };
@@ -64,12 +65,16 @@ export const store = {
   applySession(data) {
     generation += 1;
     state.doorsLoading = false;
+    state.doorsPreview = false;
     state.doors = []; state.favorites = []; state.directoryId = null; state.doorsLoadedAt = 0;
     const d = data && typeof data === 'object' ? data : {};
     state.authenticated = !!d.authenticated;
     state.user = d.user || null;
     state.households = Array.isArray(d.households) ? d.households.slice() : [];
     state.selectedHouseholdId = d.selectedHouseholdId || null;
+    if (state.authenticated && d.doorsPreview?.householdId === state.selectedHouseholdId) {
+      this.setDoors(d.doorsPreview);
+    }
     if (!state.authenticated) {
       state.user = null;
       state.households = [];
@@ -87,6 +92,7 @@ export const store = {
   clearSession() {
     generation += 1;
     state.authenticated = false;
+    state.doorsPreview = false;
     state.user = null;
     state.households = [];
     state.selectedHouseholdId = null;
@@ -153,6 +159,7 @@ export const store = {
       });
     }
     state.doors = doors.filter(Boolean);
+    state.doorsPreview = d.preview === true;
     if ('directoryId' in d) state.directoryId = d.directoryId || null;
     if (!state.doors.length) state.directoryId = null;
     // 契约：favorites 由后端给出「前 5 个」，其数组顺序即首页位次顺序。
@@ -166,7 +173,7 @@ export const store = {
     } else {
       state.favorites = deriveFavorites(state.doors, max);
     }
-    state.doorsLoadedAt = Number(d.loadedAt) || Date.now();
+    state.doorsLoadedAt = state.doorsPreview ? 0 : (Number(d.loadedAt) || Date.now());
     if (d.householdId) state.selectedHouseholdId = d.householdId;
     state.doorsError = null;
     this.notify();
@@ -205,6 +212,10 @@ export function maskAccount(account) {
 
 let inflightDoors = null;
 let generation = 0;
+
+export function pendingDoors() {
+  return inflightDoors?.generation === generation ? inflightDoors.promise : null;
+}
 
 /**
  * 拉取当前房产的门禁目录（同一时刻只允许一个请求）

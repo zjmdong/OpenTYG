@@ -3,11 +3,12 @@ import { api } from './api.js';
 import { esc } from './ui.js';
 
 const PHASES = {
+  bootstrap: { step: 0, label: '正在连接应用服务' },
   service: { step: 0, label: '正在连接应用服务' },
   restoring: { step: 1, label: '正在恢复登录' },
   connecting: { step: 2, label: '正在连接门禁' },
   directory: { step: 3, label: '正在获取门禁列表' },
-  retrying: { step: 2, label: '连接未响应，正在重新连接' },
+  retrying: { step: 2, label: '正在连接门禁' },
 };
 let active = null;
 

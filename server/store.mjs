@@ -179,11 +179,14 @@ export class SecretStore {
     await this.#remove(this.#userPath(uid));
   }
 
-  async readPrefs(uid) {
+  async readPrefs(uid, { preferMemory = false } = {}) {
     await this.init();
     const path = this.#prefsPath(uid);
-    const info = await stat(path).catch(() => null);
     const cached = this.cache.get(`p:${uid}`);
+    // Presentation reads can use the last authenticated in-process value. All
+    // mutations still validate the file, and every write refreshes this cache.
+    if (preferMemory && cached) return structuredClone(cached.value);
+    const info = await stat(path).catch(() => null);
     if (cached && info && cached.mtimeMs === info.mtimeMs) return structuredClone(cached.value);
     const value = await this.#readJson(path).catch(() => {
       throw Object.assign(new Error('偏好文件损坏，请联系管理员恢复备份'), { code: 'CREDENTIAL_STORE_UNAVAILABLE' });

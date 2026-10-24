@@ -1,5 +1,5 @@
 /** Connection preparation only: this module never sends an opening command. */
-import { loadDoors, store } from './store.js';
+import { loadDoors, pendingDoors, store } from './store.js';
 import { ApiError } from './api.js';
 
 let initialized = false;
@@ -10,6 +10,7 @@ let lastWarmupAt = -Infinity;
 export async function warmDoorConnection() {
   if (!store.state.authenticated || !store.state.selectedHouseholdId || navigator.onLine === false || document.hidden) return;
   if (opening) { deferredWarmup = true; return; }
+  if (!store.state.doorsPreview && store.state.directoryId && Date.now() - store.state.doorsLoadedAt < 2000) return;
   // visibilitychange, pageshow and online can describe the same foreground entry.
   if (Date.now() - lastWarmupAt < 2000) return;
   lastWarmupAt = Date.now();
@@ -40,7 +41,13 @@ export async function withDoorConnection(action) {
   const householdId = store.state.selectedHouseholdId;
   opening = true;
   try {
-    await loadDoors(false, { silent: true });
+    // Share an existing warmup, but never add a GET in front of every hot tap.
+    // The server validates and, if necessary, recovers before sending once.
+    const pending = pendingDoors();
+    if (pending) await pending;
+    else if (!store.state.directoryId) await loadDoors(false, { silent: true });
+    await Promise.resolve();
+    if (navigator.onLine === false) throw new ApiError('NETWORK_ERROR', '当前处于离线状态，请联网后重试', {}, 0);
     if (store.generation !== generation || !store.state.authenticated || store.state.selectedHouseholdId !== householdId) {
       throw new ApiError('STALE_DIRECTORY', '房产或登录状态已变化，请重新选择门禁', {}, 409);
     }

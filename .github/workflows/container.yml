@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Published application release tag (for example v1.2.2)'
+        description: 'Published application release tag (for example v1.2.3)'
         required: true
-        default: v1.2.2
+        default: v1.2.3
       operation:
         description: 'Publish an image, or verify anonymous pulls after making it public'
         required: true
@@ -76,6 +76,57 @@ jobs:
           docker pull --platform "linux/$ARCH" "$IMAGE:$VERSION"
           docker tag "$IMAGE:$VERSION" "$IMAGE:$VERSION-$ARCH"
           test "$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$IMAGE:$VERSION")" = "$REVISION"
+      - name: Verify native WebSocket cancellation and bounded retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          # This contract was introduced in v1.2.3; older immutable tags remain publishable.
+          if [[ "$(printf '%s\n' "$VERSION" '1.2.3' | sort -V | head -n 1)" != '1.2.3' ]]; then exit 0; fi
+          docker run --rm -i --entrypoint node "$IMAGE:$VERSION-$ARCH" --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import http from 'node:http';
+          import { setTimeout as delay } from 'node:timers/promises';
+          import { Session } from './server/service.mjs';
+          import { ROUTES } from './server/vendor/tyg-core-sdk/src/tyg-client.mjs';
+          const sockets = new Set(); let upgrades = 0, cancelled = 0;
+          const server = http.createServer();
+          server.on('upgrade', (req, socket) => {
+            upgrades++; sockets.add(socket);
+            socket.on('close', () => sockets.delete(socket)); socket.on('error', () => {});
+            socket.on('end', () => socket.end());
+            // Intentionally never finish the WS handshake: exercise native abort, not a mock WS class.
+          });
+          await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+          const origin = `http://127.0.0.1:${server.address().port}`;
+          const fetchImpl = async (url, options) => {
+            const path = new URL(url).pathname;
+            if (path === ROUTES.doorAuth) return new Promise((resolve, reject) => {
+              const abort = () => { cancelled++; reject(options.signal.reason); };
+              if (options.signal.aborted) abort(); else options.signal.addEventListener('abort', abort, { once: true });
+            });
+            const payload = path === ROUTES.initialize
+              ? { result: '0', serverConfigs: [] }
+              : path === ROUTES.loginPassword
+                ? { result: '0', code: '0', token: 'offline-ci-session', name: 'Fixture' }
+                : { code: '0', data: { areaList: [{ organizationSeq: 'fixture-org', list: [{ householdSerial: 'fixture-room', mobile: 'fixture-mobile', token: 'offline-ci-household', valid: '1' }] }] } };
+            return new Response(JSON.stringify(payload), { headers: { 'Content-Type': 'application/json' } });
+          };
+          const session = new Session('fixture', { origin, deviceId: 'fixture-device', transport: {
+            allowInsecureTransport: true, fetchImpl, connectTimeoutMs: 50, preparationTimeoutMs: 500,
+          } });
+          try {
+            await session.login({ mode: 'password', account: 'offline-ci-account', secret: 'fixture-only' });
+            const started = performance.now();
+            await assert.rejects(session.loadDirectory(session.households()[0].id), { code: 'DOORS_LOAD_FAILED' });
+            assert.equal(upgrades, 3); assert.equal(cancelled, 3);
+            assert.ok(performance.now() - started < 1500);
+            await delay(100); assert.equal(sockets.size, 0);
+            console.log('Native silent-handshake cleanup passed: 3 attempts, 3 parallel HTTP cancellations, no leaked sockets.');
+          } finally {
+            session.clearLocal(); for (const socket of sockets) socket.destroy();
+            await new Promise(resolve => server.close(resolve));
+          }
+          JS
       - name: Verify production startup and permissions
         shell: bash
         run: |

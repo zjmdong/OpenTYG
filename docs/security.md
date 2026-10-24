@@ -65,3 +65,17 @@ Before launch, check the domain and certificate, preserved ports and Origin, int
 本项目没有经过正式认证或渗透测试的承诺，不能证明不存在所有缺陷。安全问题按 [SECURITY.md](../SECURITY.md) 报告；不要在公开 Issue 提交真实凭据或住户信息。
 
 The project makes no claim of formal certification or a completed penetration test and cannot establish the absence of every defect. Follow [SECURITY.md](../SECURITY.md) for reports; never post real credentials or resident data in public issues.
+
+## 内存缓存与快速恢复 / In-memory retention and fast recovery
+
+登录状态和服务配置在单进程中有界缓存，约 24 小时闲置、最多 200 个账号；30 分钟闲置后释放 WebSocket。本地会话过期立即拒绝访问，定期回收时删除对应登录缓存；退出登录直接清理。内存驻留时间比旧版长；主机或进程被控制时不提供额外保密保证。记住登录和浏览器 Cookie 的绝对期限不变，不向客户端缓存平台凭据。
+
+The login/configuration cache is bounded to 200 accounts and 24 idle hours, with earlier LRU removal. Sockets are released after 30 idle minutes, and expired/revoked local sessions cannot retain login authority. This increases credential residency in server RAM compared with the older eviction policy; it does not protect a compromised host/process or extend cookie lifetimes.
+
+房产权验证最长复用约 60 秒；久置、断线恢复或验证过期时，先向平台重新查询权限，再获取新的门禁鉴权和配置。首页可显示当前 Cookie 所属用户的旧收藏视图，但显示缓存不作为开门权限。展示读取可使用已解密且有界的内存偏好缓存，写入和常规存储校验仍走原文件路径；所有写入都会更新缓存。外部手动替换数据文件后应重启服务，不支持多个写入进程。
+
+Household permission verification is reused for at most approximately 60 seconds. Reconnects after idle suspension re-query current permissions before any command. Cached favorites are presentation only. Presentation reads may use the bounded authenticated preference cache; mutations and normal file checks retain their original persistence path, and writes refresh the cache. Restart after manually replacing data files; multiple writers remain unsupported.
+
+自动重试仅覆盖网络准备和能够确认尚未入队的失败。协议没有供本实现使用的幂等请求编号，开门指令一旦可能发出，不能用“没有回执”推断“没有开门”。此时返回结果未知，由用户核实现场；不会为缩短界面等待而发送第二、第三条开门指令。
+
+Retries apply only to preparation and proven pre-queue failures. The integrated protocol provides no usable idempotency key, so a lost acknowledgment cannot prove the door command was not applied. Possibly sent commands remain unknown and are never silently replayed.

@@ -21,7 +21,7 @@ import { SessionRegistry, clearSessionCookie, readSessionCookie, setSessionCooki
 
 const HERE = fileURLToPath(new URL('.', import.meta.url));
 const WEB_ROOT = resolve(HERE, '../web');
-const APP_VERSION = '1.2.2';
+const APP_VERSION = '1.2.3';
 const MAX_BODY_BYTES = 64 * 1024;
 const MAX_NAME_LENGTH = 20;
 const DEFAULT_COOLDOWN_MS = 3000;
@@ -136,9 +136,12 @@ export async function createApp({
   await store.init();
   const secret = appSecret;
   const transport = { allowInsecureTransport: allowInsecureUpstream,
+    onPreparation: fields => logger.info('连接准备耗时', fields),
     allowedHosts: allowedUpstreamHosts.split(',').map(x => x.trim().toLowerCase()).filter(Boolean), retainIntercomPassword: false };
   if (!transport.allowedHosts.length) transport.allowedHosts = [new URL(upstreamOrigin).hostname.toLowerCase()];
-  const pool = new SessionPool({ origin: upstreamOrigin, secret, transport, onEvict: uid => logger.info('会话回收', { user: uid.slice(0, 8) }) });
+  const pool = new SessionPool({ origin: upstreamOrigin, secret, transport,
+    canRetain: uid => [...registry.entries.values()].some(entry => entry.uid === uid && !registry.expired(entry)),
+    onEvict: uid => logger.info('会话回收', { user: uid.slice(0, 8) }) });
   // 会话表必须持久化：否则服务重启后 cookie 合法但取不到 uid，用户会被要求重新登录。
   const registry = new SessionRegistry({ secret, key: store.key, path: join(store.directory, 'sessions.json') });
   registry.load();
@@ -178,6 +181,7 @@ export async function createApp({
   // ---------------------------------------------------------------- 请求工具
 
   const makeHelpers = (req, res) => {
+    const helperStartedAt = performance.now();
     const readJson = async () => {
       if (!/^application\/json\b/i.test(String(req.headers['content-type'] || ''))) throw fail('CONTENT_TYPE');
       const chunks = [];
@@ -210,6 +214,10 @@ export async function createApp({
     const send = (data) => {
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
       res.end(JSON.stringify({ ok: true, data }));
+      const path = String(req.url || '').split('?')[0];
+      if (['/api/bootstrap','/api/auth/session','/api/doors','/api/doors/open'].includes(path)) {
+        try { logger.info('请求耗时', { path, ms: Math.round(performance.now() - helperStartedAt) }); } catch { /* telemetry only */ }
+      }
     };
     const secure = () => policy.secure;
     return { readJson, string, send, secure };
@@ -331,8 +339,8 @@ export async function createApp({
      * 因此即使迁移逻辑出错，用户数据也还有一份可回滚的副本。
      * 迁移没有归属信息时不会猜、不会丢：数据留在 `legacy` 里等用户选定房产。
      */
-    const prefs = async (uid) => {
-      const raw = await store.readPrefs(uid);
+    const prefs = async (uid, { preferMemory = false } = {}) => {
+      const raw = await store.readPrefs(uid, { preferMemory });
       const value = normalizePrefs(raw);
       const needsWrite = value.migrated === true || (raw && raw.schemaVersion !== PREFS_SCHEMA_VERSION);
       delete value.migrated;
@@ -402,16 +410,20 @@ export async function createApp({
 
     const sessionPayload = async session => {
       const households = session.households().map(householdView);
-      const prefsValue = session.uid && !session.uid.startsWith('anon:') ? await prefs(session.uid) : emptyPrefs();
+      const prefsValue = session.uid && !session.uid.startsWith('anon:') ? await prefs(session.uid, { preferMemory: true }) : emptyPrefs();
       const selected = prefsValue.selectedHouseholdId && households.some(item => item.id === prefsValue.selectedHouseholdId)
         ? prefsValue.selectedHouseholdId
         : (session.selectedHouseholdId || null);
+      const previewDoors = selected && households.some(room => room.id === selected && room.available) && selected === session.selectedHouseholdId && session.directoryId
+        ? buildDoors(session.doors, prefsValue, selected) : [];
       return {
         authenticated: session.authenticated(),
         user: userView(session.client?.getCredentials().user, session.uid, prefsValue.displayName),
         households,
         selectedHouseholdId: selected,
         restored: false,
+        doorsPreview: previewDoors.length ? { householdId: selected, directoryId: session.directoryId,
+          doors: previewDoors, favorites: favoritesOf(previewDoors), preview: session.needsPreparation(selected), loadedAt: session.directoryReadyAt } : null,
       };
     };
 
@@ -472,20 +484,23 @@ export async function createApp({
       return;
     }
 
-    if (path === '/api/auth/session' && method === 'GET') {
+    if (['/api/auth/session','/api/bootstrap'].includes(path) && method === 'GET') {
+      const sendSession = data => send(path === '/api/bootstrap'
+        ? { meta: { app: 'OpenTYG', version: APP_VERSION, maxFavorites: MAX_FAVORITES, openCooldownMs: DEFAULT_COOLDOWN_MS }, session: data }
+        : data);
       if (!entry?.uid) {
-        send({ authenticated: false, user: null, households: [], selectedHouseholdId: null, restored: false });
+        sendSession({ authenticated: false, user: null, households: [], selectedHouseholdId: null, restored: false });
         return;
       }
       const live = pool.get(entry.uid);
-      if (live?.authenticated()) { send(await sessionPayload(live)); return; }
+      if (live?.authenticated()) { sendSession(await sessionPayload(live)); return; }
       try {
         const session = await requireUser();
-        send({ ...(await sessionPayload(session)), restored: true });
+        sendSession({ ...(await sessionPayload(session)), restored: true });
       } catch (error) {
         if (!['SESSION_EXPIRED','SAVED_LOGIN_INVALID','NOT_LOGGED_IN'].includes(error.code)) throw error;
         clearSessionCookie(res,{secure:secure()});
-        send({ authenticated: false, user: null, households: [], selectedHouseholdId: null, restored: false });
+        sendSession({ authenticated: false, user: null, households: [], selectedHouseholdId: null, restored: false });
       }
       return;
     }
@@ -667,16 +682,15 @@ export async function createApp({
 
     if (path === '/api/doors' && method === 'GET') {
       const session = await requireUser();
-      const prefsValue = await prefs(session.uid);
+      const prefsValue = await prefs(session.uid, { preferMemory: true });
       const householdId = prefsValue.selectedHouseholdId || session.selectedHouseholdId;
       if (!householdId) throw fail('HOUSEHOLD_NOT_SELECTED');
       const refresh = url.searchParams.get('refresh') === '1';
       const stale = refresh || session.needsPreparation(householdId);
       if (stale) {
-        session.household(householdId);
-        const remainingMs = 15_000 - (Date.now() - requestStartedAt);
+        const remainingMs = 3000 - (Date.now() - requestStartedAt);
         if (remainingMs <= 0) throw fail('HTTP_TIMEOUT');
-        await oneAtATime(session, () => session.loadDirectory(householdId, { timeoutMs: remainingMs }));
+        await oneAtATime(session, () => session.loadDirectory(householdId, { timeoutMs: remainingMs, forceNewContext: refresh }));
       }
       const doors = buildDoors(session.doors, prefsValue, householdId);
       const bucket = householdPrefs(prefsValue, householdId);

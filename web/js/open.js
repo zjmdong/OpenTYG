@@ -3,7 +3,7 @@
  *
  * 契约依据：docs/api.md POST /api/doors/open
  *  - 业务失败：HTTP 200 + { success:false, message } → 红色弹窗展示后端 message
- *  - WS_NOT_CONNECTED / WS_CLOSED / WS_ERROR → 先自动 GET /api/doors?refresh=1 再提示重试
+ *  - 服务端自动恢复尚未发送的连接失败；不要求用户为了重连再按一次
  *  - WS_TIMEOUT / OPEN_RESULT_UNKNOWN → 明确提示“结果未知”，绝不自动重发
  *  - OPEN_COOLDOWN / BUSY → 轻提示，不弹窗
  */
@@ -13,7 +13,6 @@ import { loadDoors, store } from './store.js';
 import { showResult, toast } from './ui.js';
 import { withDoorConnection } from './doorConnection.js';
 
-const WS_DOWN = new Set(['WS_NOT_CONNECTED', 'WS_CLOSED', 'WS_ERROR']);
 const RESULT_UNKNOWN = new Set(['WS_TIMEOUT', 'OPEN_RESULT_UNKNOWN']);
 
 /**
@@ -30,9 +29,22 @@ export async function openDoor(door) {
   let commandRequested = false;
 
   try {
-    const data = await withDoorConnection(() => {
+    const data = await withDoorConnection(async () => {
       commandRequested = true;
-      return api.openDoor(doorId);
+      try { return await api.openDoor(doorId); }
+      catch (error) {
+        // STALE_DIRECTORY is rejected by the server before any command is
+        // queued. Refresh this intent once while retaining the one-tap guard.
+        if (error.code !== 'STALE_DIRECTORY') throw error;
+        commandRequested = false;
+        const householdId = store.state.selectedHouseholdId;
+        await loadDoors(false, { silent: true });
+        if (store.generation !== generation || !store.state.authenticated || store.state.selectedHouseholdId !== householdId || !store.findDoor(doorId)) {
+          throw new Error('门禁或登录状态已变化，请重新选择');
+        }
+        commandRequested = true;
+        return api.openDoor(doorId);
+      }
     });
     if (store.generation === generation) store.applyDoorConnection(data);
 
@@ -49,25 +61,6 @@ export async function openDoor(door) {
     return { ok: false, data };
   } catch (err) {
     const code = err && err.code;
-
-    /* 连接断开：先自动重连（refresh=1）一次，再提示用户重试；不自动重发开门 */
-    if (WS_DOWN.has(code)) {
-      toast('门禁连接已断开，正在重新连接…', 'warn', 3000);
-      let reconnected = false;
-      try {
-        await loadDoors(true);
-        reconnected = true;
-      } catch (reloadErr) {
-        console.error('[opentyg] 门禁重连失败', reloadErr);
-      }
-      showResult({
-        success: false,
-        title: '连接已断开',
-        message: reconnected ? '门禁连接已重新建立，请再次开门' : '门禁暂时无法连接，请检查网络后重试',
-        duration: 3000,
-      });
-      return { ok: false, error: err, reconnected };
-    }
 
     /* 结果未知：禁止自动重发 */
     if (RESULT_UNKNOWN.has(code) || (commandRequested && ['REQUEST_TIMEOUT', 'NETWORK_ERROR', 'BAD_RESPONSE'].includes(code))) {

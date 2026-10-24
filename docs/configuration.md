@@ -16,7 +16,7 @@ The installer writes configuration directly into `docker-compose.yml`, without a
 | `APP_DATA_DIR` | `./data` | 数据挂载目录；首次需提前创建。Data bind-mount directory; create before first start. |
 | `APP_SECRET_PATH` | `./secrets/opentyg_secret.txt` | 外部密钥文件路径。External secret file path. |
 | `APP_UID` / `APP_GID` | `10001` / `10001` | 容器数值身份，须匹配数据和密钥文件权限。Numeric container identity; match data and secret ownership. |
-| `OPENTYG_VERSION` | `1.2.2` | 拉取的公开镜像版本；建议固定 Release，`latest` 跟随稳定版。Public image version; pin a release, or use `latest` for the current stable image. |
+| `OPENTYG_VERSION` | `1.2.3` | 拉取的公开镜像版本；建议固定 Release，`latest` 跟随稳定版。Public image version; pin a release, or use `latest` for the current stable image. |
 | `NODE_IMAGE` | `node:24-alpine` | 仅用于 `docker-compose.build.yml` 源码构建覆盖文件。构建基础镜像；使用兼容的官方 Alpine Node 镜像，可固定 digest。Only used by the source-build override `docker-compose.build.yml`. Build base; use a compatible official Alpine Node image, optionally pinned by digest. |
 | `TYG_ORIGIN` | `http://lxj.taoyuangu.com:80` | 平台初始化入口；地址改变可能使保存的登录失效。Platform bootstrap origin; changing it can invalidate saved login state. |
 | `UPSTREAM_ALLOWED_HOSTS` | `lxj.taoyuangu.com,uums.taoyuangu.com,sso.taoyuangu.com` | 逗号分隔的精确主机名，不支持通配符、协议或端口。Comma-separated exact hostnames; no wildcards, schemes, or ports. |

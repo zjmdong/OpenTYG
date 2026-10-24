@@ -1,7 +1,7 @@
 /**
  * app.js — 启动引导
- *  1. GET /api/meta         （无需登录）
- *  2. GET /api/auth/session （恢复登录态；未登录一律跳 #/login）
+ *  1. GET /api/bootstrap （一次返回配置、会话和有权限查看的收藏预览）
+ *  2. 后台准备门禁，开门前服务端仍验证当前权限
  *  3. 启动 hash 路由 + 底部三页签导航
  *  401 / SESSION_EXPIRED 统一清状态并跳登录页
  */
@@ -79,23 +79,14 @@ async function boot() {
   initPwa();
   renderBoot();
 
-  // 1) meta（无需登录）
+  // One browser round trip instead of sequential meta + session requests.
   try {
-    const meta = await withConnectionProgress('service', () => api.getMeta());
-    store.setMeta(meta);
-  } catch (err) {
-    console.error('[opentyg] /api/meta 失败', err);
-    renderFatal(err);
-    return;
-  }
-
-  // 2) 会话恢复
-  try {
-    const session = await withConnectionProgress('restoring', () => api.getSession());
-    store.applySession(session);
+    const data = await withConnectionProgress('bootstrap', () => api.getBootstrap());
+    store.setMeta(data.meta);
+    store.applySession(data.session);
   } catch (err) {
     if (!['SESSION_EXPIRED','SAVED_LOGIN_INVALID','NOT_LOGGED_IN'].includes(err?.code)) {
-      console.error('[opentyg] /api/auth/session 失败', err);
+      console.error('[opentyg] /api/bootstrap 失败', err);
       renderFatal(err);
       return;
     }

@@ -97,6 +97,7 @@ async function request(path, options = {}) {
 
 export const api = {
   /* ---- 基础 ---- */
+  getBootstrap: () => request('/api/bootstrap', { timeoutMs: 6000 }),
   getMeta: () => request('/api/meta', { timeoutMs: 8000 }),
 
   /* ---- 认证 ---- */

@@ -116,21 +116,30 @@ export function normalizeDoors(response) {
 /** 原协议没有 requestId。同一通道只允许一个未完成请求，超时即废弃连接。 */
 class DoorChannel {
   constructor(url, connectTimeoutMs) { this.url = url; this.connectTimeoutMs = connectTimeoutMs; this.pending = null; }
-  async connect() {
+  async connect(signal) {
     await new Promise((resolve, reject) => {
+      signal?.throwIfAborted();
       const ws = this.ws = new WebSocket(this.url);
+      let settled = false;
+      const finish = (error) => {
+        if (settled) return;
+        settled = true; clearTimeout(timer); signal?.removeEventListener('abort', abort);
+        if (error) reject(error); else resolve();
+      };
+      const abort = () => { finish(new TygError('WS_CONNECT_TIMEOUT', '门禁连接超时', {}, 504)); ws.close(); };
       const timer = setTimeout(() => {
-        ws.close(); reject(new TygError('WS_CONNECT_TIMEOUT', '门禁连接超时', {}, 504));
+        abort();
       }, this.connectTimeoutMs);
-      ws.addEventListener('open', () => { clearTimeout(timer); resolve(); }, { once: true });
+      signal?.addEventListener('abort', abort, { once: true });
+      ws.addEventListener('open', () => { finish(); }, { once: true });
       ws.addEventListener('message', event => this.onMessage(event.data));
       ws.addEventListener('error', () => {
-        clearTimeout(timer); const e = new TygError('WS_ERROR', '门禁连接异常', {}, 502);
-        this.failPending(e); reject(e);
+        const e = new TygError('WS_ERROR', '门禁连接异常', {}, 502);
+        this.failPending(e); finish(e);
       });
       ws.addEventListener('close', () => {
-        clearTimeout(timer); const e = new TygError('WS_CLOSED', '门禁连接已断开', {}, 502);
-        this.failPending(e); reject(e);
+        const e = new TygError('WS_CLOSED', '门禁连接已断开', {}, 502);
+        this.failPending(e); finish(e);
       });
     });
   }
@@ -152,29 +161,32 @@ class DoorChannel {
         if (p.type === 'OpenDoor' && (typeof response.data !== 'string' || response.code == null)) return;
       }
     } catch (error) { this.failPending(error); this.close(); return; }
-    this.pending = null; clearTimeout(p.timer); p.resolve(response);
+    this.pending = null; p.cleanup(); p.resolve(response);
   }
   failPending(error) {
     const p = this.pending;
     if (!p) return;
-    this.pending = null; clearTimeout(p.timer);
+    this.pending = null; p.cleanup();
     if (p.type === 'OpenDoor') {
       p.reject(new TygError('OPEN_RESULT_UNKNOWN', '开门指令已发送，未收到确定结果；请核实现场状态', { cause: error.code, sent: true }, 504));
     } else p.reject(error);
   }
-  request(type, message, timeoutMs) {
+  request(type, message, timeoutMs, { signal, onSent } = {}) {
     if (this.pending) throw new TygError('BUSY', '门禁请求正在进行', {}, 409);
     if (this.ws?.readyState !== WebSocket.OPEN) throw new TygError('WS_NOT_CONNECTED', '请重新获取门列表以连接门禁', {}, 409);
+    signal?.throwIfAborted();
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.failPending(new TygError('WS_TIMEOUT', '门禁响应超时', {}, 504));
         this.close(); // 防止迟到响应被下一次请求误接收。
       }, timeoutMs);
-      this.pending = { type, resolve, reject, timer };
-      try { this.ws.send(JSON.stringify(message)); }
+      const abort = () => { this.failPending(new TygError('WS_TIMEOUT', '门禁响应超时', {}, 504)); this.close(); };
+      this.pending = { type, resolve, reject, timer, cleanup: () => { clearTimeout(timer); signal?.removeEventListener('abort', abort); } };
+      signal?.addEventListener('abort', abort, { once: true });
+      try { this.ws.send(JSON.stringify(message)); onSent?.(); }
       catch {
-        this.pending = null; clearTimeout(timer);
-        reject(new TygError('WS_SEND_FAILED', '门禁消息发送失败', {}, 502));
+        this.pending?.cleanup(); this.pending = null; clearTimeout(timer);
+        reject(new TygError(type === 'OpenDoor' ? 'OPEN_RESULT_UNKNOWN' : 'WS_SEND_FAILED', '门禁消息发送未能确认', {}, 502));
       }
     });
   }
@@ -255,7 +267,7 @@ export class TygClient {
       this.timings = this.timings.slice(-40);
     }
   }
-  async post(route, body, token) {
+  async post(route, body, token, { signal = this.preparationSignal } = {}) {
     return this.measure(Object.keys(ROUTES).find(key => ROUTES[key] === route) || 'http', async () => {
     const service = route.split('/')[1];
     const url = new URL(route, this.serviceBase(service)); // 原 Retrofit 的路径以 / 开头。
@@ -264,7 +276,7 @@ export class TygClient {
     // logout are deliberately excluded. The timeout also covers the response body.
     const readOnly = [ROUTES.initialize, ROUTES.households, ROUTES.doorAuth].includes(route);
     const attempts = readOnly ? this.readAttempts : 1;
-    const preparationSignal = readOnly ? this.preparationSignal : null;
+    const preparationSignal = readOnly ? signal : null;
     for (let attempt = 0; attempt < attempts; attempt += 1) {
       try {
         preparationSignal?.throwIfAborted();
@@ -433,8 +445,8 @@ export class TygClient {
     required(h.token, 'household token'); required(h.mobile, '房产 mobile'); required(h.householdSerial, 'householdSerial'); required(h.organizationSeq, 'organizationSeq');
     return h;
   }
-  async requestDoorAuth(h) {
-    const r = await this.post(ROUTES.doorAuth, { mobile: h.mobile }, h.token); codeOK(r);
+  async requestDoorAuth(h, options) {
+    const r = await this.post(ROUTES.doorAuth, { mobile: h.mobile }, h.token, options); codeOK(r);
     return required(r.data?.data, '开门 authcode');
   }
   async authorize(h) {
@@ -460,21 +472,27 @@ export class TygClient {
   }
   getDoors(householdId) { return this.exclusive(async () => {
     this.assertLogin(); const h = this.household(householdId); this.clearDoor();
+    const attempt = new AbortController();
+    const signal = this.preparationSignal ? AbortSignal.any([attempt.signal, this.preparationSignal]) : attempt.signal;
+    let branches = [];
     try {
       const channel = this.channel = new DoorChannel(this.wsUrl(h), this.connectTimeoutMs);
       // WS 握手仅依赖房产 token；配置消息须等待 authcode 和连接两者就绪。
-      const [, authcode] = await Promise.all([
-        this.measure('wsConnect', () => channel.connect()), this.requestDoorAuth(h),
-      ]);
+      branches = [this.measure('wsConnect', () => channel.connect(signal)), this.requestDoorAuth(h, { signal })];
+      const [, authcode] = await Promise.all(branches);
       if (this.closed || this.channel !== channel) throw new TygError('CLIENT_CLOSED', '会话已关闭', {}, 410);
       this.authcode = authcode; this.selected = h;
-      const r = await this.measure('doorConfig', () => channel.request('MobileDownloadConfig', this.wsMessage('MobileDownloadConfig', { mobile: h.mobile, organizationSeq: h.organizationSeq }), this.configTimeoutMs));
+      const r = await this.measure('doorConfig', () => channel.request('MobileDownloadConfig', this.wsMessage('MobileDownloadConfig', { mobile: h.mobile, organizationSeq: h.organizationSeq }), this.configTimeoutMs, { signal }));
       resultOK(r);
       // 原 APP 的配置响应不要求 code；如存在业务 code 则检查。
       if (r.code != null) codeOK(r);
       this.doors = normalizeDoors(r); this.directoryId = randomUUID();
       return { householdId, directoryId: this.directoryId, doors: this.doors, credentials: this.getCredentials() };
-    } catch (e) { this.clearDoor(); throw e; }
+    } catch (e) {
+      // A failed WS handshake must cancel the parallel HTTP authorization too.
+      // Await cleanup before another attempt can enter the SDK's exclusive lane.
+      attempt.abort(); this.clearDoor(); await Promise.allSettled(branches); throw e;
+    } finally { attempt.abort(); }
   }); }
   getCredentials({ includeSecrets = false } = {}) {
     const credentials = { sessionToken: this.session?.token || '', householdToken: this.selected?.token || '', authcode: this.authcode };
@@ -552,10 +570,9 @@ export class TygClient {
     if (!door) throw new TygError('DOOR_NOT_FOUND', '只能操作当前配置下发的门', {}, 404);
     if (this.channel?.ws?.readyState !== WebSocket.OPEN) throw new TygError('WS_NOT_CONNECTED', '请重新获取门列表以连接门禁', {}, 409);
     if (Date.now() - this.lastOpenAt < this.openCooldownMs) throw new TygError('OPEN_COOLDOWN', '开门操作间隔至少 3 秒', {}, 429);
-    this.lastOpenAt = Date.now();
     const h = this.selected;
     const body = { code: door.code, mobile: h.mobile, clientType: '2', householdSerial: h.householdSerial, number: door.number };
-    const r = await this.measure('openDoor', () => this.channel.request('OpenDoor', this.wsMessage('OpenDoor', body), this.openTimeoutMs));
+    const r = await this.measure('openDoor', () => this.channel.request('OpenDoor', this.wsMessage('OpenDoor', body), this.openTimeoutMs, { onSent: () => { this.lastOpenAt = Date.now(); } }));
     resultOK(r);
     const success = text(r.code) === '0' && r.data === '开门成功';
     return { status: success ? 'acknowledged' : 'rejected', success, message: text(r.data || r.reason),

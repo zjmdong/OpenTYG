@@ -10,14 +10,20 @@
 import { TygClient, DEFAULT_ORIGIN } from './vendor/tyg-core-sdk/src/tyg-client.mjs';
 import { AppError, fail, toAppError } from './errors.mjs';
 import { deriveDeviceId } from './store.mjs';
-import { setTimeout as delay } from 'node:timers/promises';
 
 const IDLE_LIMIT_MS = 30 * 60 * 1000;
+const SESSION_RETENTION_MS = 24 * 60 * 60 * 1000;
+const PREPARE_BUDGET_MS = 2900;
+const ATTEMPT_BUDGET_MS = 950;
 const MAX_SESSIONS = 200;
 const LOGIN_OS = '4'; // 官方 Android 设备类型，与 SDK 默认一致
 const DIRECTORY_FRESH_MS = 60_000;
 // Only connection/configuration reads are retried. Never retry an OpenDoor message.
 const PREPARE_RETRY_CODES = new Set(['WS_CONNECT_TIMEOUT', 'WS_ERROR', 'WS_CLOSED', 'WS_NOT_CONNECTED', 'WS_TIMEOUT', 'HTTP_ERROR', 'HTTP_TIMEOUT']);
+function retryablePreparation(error) {
+  return PREPARE_RETRY_CODES.has(error?.code) ||
+    (error?.code === 'HTTP_STATUS' && [502,503,504].includes(error.details?.httpStatus));
+}
 
 export class Session {
   constructor(uid, { origin, deviceId, transport = {} }) {
@@ -36,6 +42,7 @@ export class Session {
     this.pending = 0;
     this.restoring = null;
     this.directoryReadyAt = 0;
+    this.householdsVerifiedAt = 0;
     this.preparing = false;
     this.progress = { phase: 'idle', startedAt: 0 };
   }
@@ -46,7 +53,7 @@ export class Session {
 
   createClient() {
     return new TygClient({ origin: this.origin, lastLoginOs: LOGIN_OS, deviceUniqueId: this.deviceId,
-      readTimeoutMs: 4000, readAttempts: 2, connectTimeoutMs: 4000, configTimeoutMs: 5000,
+      readTimeoutMs: ATTEMPT_BUDGET_MS, readAttempts: 1, connectTimeoutMs: ATTEMPT_BUDGET_MS, configTimeoutMs: ATTEMPT_BUDGET_MS,
       ...this.transport, onProgress: operation => {
         if (!this.preparing) return;
         if (operation === 'retrying') this.progress.phase = 'retrying';
@@ -57,29 +64,53 @@ export class Session {
       } });
   }
 
-  async prepare(phase, action, timeoutMs = 12_000) {
-    const client = this.client;
-    const controller = new AbortController();
+  async prepare(phase, action, { timeoutMs = PREPARE_BUDGET_MS, attempts = 3, freshClient = false } = {}) {
+    const started = performance.now();
+    const budget = Math.min(this.transport.preparationTimeoutMs || PREPARE_BUDGET_MS, timeoutMs);
+    const stages = [];
+    let usedAttempts = 0;
     this.progress = { phase, step: phase === 'restoring' ? 1 : 2, startedAt: Date.now() };
     this.preparing = true;
-    client.preparationSignal = controller.signal;
-    const timer = setTimeout(() => {
-      controller.abort();
-      client.clearDoor();
-    }, Math.min(this.transport.preparationTimeoutMs || 12_000, timeoutMs));
     try {
-      const result = await action();
-      controller.signal.throwIfAborted();
-      this.progress.phase = 'ready';
-      return result;
+      for (let attempt = 0; attempt < attempts; attempt += 1) {
+        const remaining = budget - (performance.now() - started);
+        if (remaining < 10) throw fail('HTTP_TIMEOUT');
+        if (freshClient) { this.client?.close(); this.client = this.createClient(); }
+        const client = this.client;
+        const before = new Set(client.timings);
+        const controller = new AbortController();
+        usedAttempts += 1;
+        client.preparationSignal = controller.signal;
+        // Individual network stages have a 950ms deadline. Do not repeatedly
+        // discard a healthy multi-stage flow merely because it takes >950ms.
+        const timer = setTimeout(() => { controller.abort(); client.clearDoor(); }, remaining);
+        try {
+          const result = await action(client);
+          controller.signal.throwIfAborted();
+          this.progress.phase = 'ready';
+          return result;
+        } catch (error) {
+          controller.abort(); client.clearDoor();
+          const wrapped = controller.signal.reason && error.name === 'AbortError' ? fail('HTTP_TIMEOUT') : error;
+          if (attempt + 1 === attempts || !retryablePreparation(wrapped) || this.client !== client) throw wrapped;
+          this.progress.phase = 'retrying';
+        } finally {
+          clearTimeout(timer);
+          client.preparationSignal = null;
+          stages.push(...client.timings.filter(t => !before.has(t)));
+        }
+      }
     } catch (error) {
       this.progress.phase = 'failed';
-      if (controller.signal.aborted) throw fail('HTTP_TIMEOUT', '连接门禁服务超时，请重试；登录状态已保留');
+      if (error.code === 'HTTP_TIMEOUT') throw fail('HTTP_TIMEOUT', '门禁服务暂时无法连接，自动恢复未成功；登录状态已保留');
       throw error;
     } finally {
-      clearTimeout(timer);
       this.preparing = false;
-      client.preparationSignal = null;
+      const allowed = new Set(['initialize','households','wsConnect','doorAuth','doorConfig']);
+      try {
+        this.transport.onPreparation?.({ phase, attempts: usedAttempts, ms: Math.round(performance.now() - started),
+          outcome: this.progress.phase, stages: stages.filter(t => allowed.has(t.operation)).map(t => `${t.operation}:${t.durationMs}:${t.errorCode || 'ok'}`).join(',') });
+      } catch { /* Diagnostics cannot change the result of a door operation. */ }
     }
   }
 
@@ -116,6 +147,7 @@ export class Session {
     // 否则房产列表为空、无法自动进入门禁目录，用户会停在"无可用房产"。
     try {
       await client.getHouseholds();
+      this.householdsVerifiedAt = Date.now();
     } catch (error) {
       this.householdsError = toAppError(error).code;
       throw error;
@@ -129,8 +161,8 @@ export class Session {
       if (!previous?.session) throw fail('SAVED_LOGIN_INVALID', '本地没有可恢复的登录状态');
       // 不复用旧 client 实例，避免半恢复状态；deviceUniqueId 保持一致，上游视为同一设备。
       try { this.client?.close(); } catch { /* 已关闭 */ }
-      this.client = this.createClient();
-      await this.prepare('restoring', () => this.client.restoreLoginSession(Buffer.from(previous.session, 'base64')));
+      await this.prepare('restoring', client => client.restoreLoginSession(Buffer.from(previous.session, 'base64')), { freshClient: true });
+      this.householdsVerifiedAt = Date.now();
       this.loginAt = previous.loginAt || Date.now();
       this.remembered = previous.remembered !== false;
       return this.client.getState();
@@ -146,6 +178,15 @@ export class Session {
     this.doors = [];
     this.doorIndex.clear();
     this.directoryReadyAt = 0;
+    this.householdsVerifiedAt = 0;
+  }
+
+  suspendConnection() {
+    // Retain the bounded login/household snapshot, not an idle socket. Every
+    // subsequent open must obtain fresh upstream authorization before sending.
+    this.client?.clearDoor();
+    this.directoryReadyAt = 0;
+    this.householdsVerifiedAt = 0;
   }
 
   household(id) {
@@ -159,39 +200,38 @@ export class Session {
   }
 
   /** 选中房产并加载门禁目录（SDK 内部会取 authcode + 建 WS + 下载配置）。 */
-  async loadDirectory(householdId, { timeoutMs = 12_000 } = {}) {
+  async loadDirectory(householdId, { timeoutMs = PREPARE_BUDGET_MS, attempts = 3, forceNewContext = false } = {}) {
     if (!this.client) throw fail('NOT_LOGGED_IN');
-    this.directoryId = null; this.selectedHouseholdId = null;
-    this.doors = []; this.doorIndex.clear();
+    // Keep the last validated intent while reconnecting, but mark it unusable
+    // for direct sends until a new authorized directory has been obtained.
+    this.directoryReadyAt = 0;
     try {
-      const client = this.client;
-      let directory;
-      await this.prepare('connecting', async () => {
-        for (let attempt = 0; attempt < 2; attempt += 1) {
-          try { directory = await client.getDoors(householdId); break; }
-          catch (error) {
-            if (attempt !== 0 || !PREPARE_RETRY_CODES.has(error?.code)) throw error;
-            await delay(200);
-            client.preparationSignal?.throwIfAborted();
-            this.progress.phase = 'retrying';
-            if (this.client !== client || client.closed) throw fail('CLIENT_CLOSED');
-          }
+      const directory = await this.prepare('connecting', async client => {
+        if (Date.now() - this.householdsVerifiedAt >= DIRECTORY_FRESH_MS) {
+          // Retention must not turn old room-valid flags into durable authority.
+          await client.getHouseholds();
+          this.householdsVerifiedAt = Date.now();
         }
-      }, timeoutMs);
+        return client.getDoors(householdId);
+      }, { timeoutMs, attempts });
+      const fingerprint = doors => JSON.stringify(doors.map(d => ({ ...d })).sort((a,b) => a.id.localeCompare(b.id)));
+      const sameDirectory = !forceNewContext && this.selectedHouseholdId === householdId && this.directoryId && fingerprint(this.doors) === fingerprint(directory.doors);
       this.selectedHouseholdId = householdId;
-      this.directoryId = directory.directoryId;
+      // UI intent identifies a permission/configuration snapshot, not a socket.
+      // Reconnecting an unchanged directory must not invalidate a pending tap.
+      this.directoryId = sameDirectory ? this.directoryId : directory.directoryId;
       this.doors = directory.doors.map(door => ({ ...door }));
       this.doorIndex = new Map(this.doors.map(door => [door.id, door]));
       this.directoryReadyAt = Date.now();
-      return directory;
+      return { ...directory, directoryId: this.directoryId };
     } catch (error) {
       if (error?.code === 'HOUSEHOLD_UNAVAILABLE' || error?.code === 'HOUSEHOLD_NOT_FOUND') throw error;
       const wrapped = toAppError(error);
       if (wrapped.code === 'HOUSEHOLD_UNAVAILABLE') throw wrapped;
       if (['HTTP_TIMEOUT','WS_CONNECT_TIMEOUT','WS_TIMEOUT'].includes(wrapped.code)) {
-        throw new AppError('DOORS_LOAD_FAILED', '门禁连接超时，请点击重试；登录状态已保留', { cause: wrapped.code });
+        throw new AppError('DOORS_LOAD_FAILED', '门禁服务暂时无法连接，自动恢复未成功；登录状态已保留', { cause: wrapped.code, retryable: retryablePreparation(error) });
       }
-      throw new AppError('DOORS_LOAD_FAILED', undefined, { cause: wrapped.code });
+      throw new AppError('DOORS_LOAD_FAILED', undefined, { cause: wrapped.code, retryable: retryablePreparation(error) });
     }
   }
 
@@ -204,7 +244,8 @@ export class Session {
   connected() { return this.client?.getCredentials().connected === true; }
 
   needsPreparation(householdId = this.selectedHouseholdId) {
-    return !this.connected() || this.selectedHouseholdId !== householdId || !this.directoryId || !this.doors.length || Date.now() - this.directoryReadyAt >= DIRECTORY_FRESH_MS;
+    return !this.connected() || this.selectedHouseholdId !== householdId || !this.directoryId || !this.doors.length ||
+      Date.now() - this.directoryReadyAt >= DIRECTORY_FRESH_MS || Date.now() - this.householdsVerifiedAt >= DIRECTORY_FRESH_MS;
   }
 
   /** 调用 SDK 开门；返回归一化业务结果。 */
@@ -216,10 +257,26 @@ export class Session {
     // door id again so a removed/changed door cannot be opened accidentally.
     const householdId = this.selectedHouseholdId;
     this.door(doorId);
-    if (this.needsPreparation(householdId)) await this.loadDirectory(householdId);
-    const door = this.door(doorId);
     const startedAt = Date.now();
-    const result = await this.client.openDoor({ householdId: this.selectedHouseholdId, directoryId: this.directoryId, doorId: door.id });
+    const deadline = performance.now() + PREPARE_BUDGET_MS;
+    let result, door, reconnect = false;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        if (reconnect || this.needsPreparation(householdId)) {
+          await this.loadDirectory(householdId, { attempts: 1, timeoutMs: Math.max(1, deadline - performance.now()) });
+        }
+        door = this.door(doorId);
+        result = await this.client.openDoor({ householdId, directoryId: this.client.directoryId, doorId: door.id });
+        break;
+      } catch (error) {
+        // These errors prove no OpenDoor payload was queued. Any queued command
+        // with a lost/late receipt remains UNKNOWN and is never replayed.
+        const safe = error.code === 'WS_NOT_CONNECTED' ||
+          (error.code === 'DOORS_LOAD_FAILED' && error.details?.retryable === true);
+        if (!safe || attempt === 2 || performance.now() >= deadline) throw error;
+        reconnect = true;
+      }
+    }
     return {
       success: result.success === true,
       status: result.status,
@@ -237,12 +294,15 @@ export class Session {
 
 /** 会话池：uid → Session，带闲置回收。 */
 export class SessionPool {
-  constructor({ origin, secret, transport = {}, maxSessions = MAX_SESSIONS, idleLimitMs = IDLE_LIMIT_MS, onEvict } = {}) {
+  constructor({ origin, secret, transport = {}, maxSessions = MAX_SESSIONS, idleLimitMs = IDLE_LIMIT_MS,
+    retentionMs = SESSION_RETENTION_MS, canRetain = () => true, onEvict } = {}) {
     this.origin = origin || DEFAULT_ORIGIN;
     this.secret = secret;
     this.transport = transport;
     this.maxSessions = maxSessions;
     this.idleLimitMs = idleLimitMs;
+    this.retentionMs = retentionMs;
+    this.canRetain = canRetain;
     this.sessions = new Map();
     this.onEvict = onEvict;
   }
@@ -295,7 +355,12 @@ export class SessionPool {
     let removed = 0;
     for (const [uid, session] of this.sessions) {
       if (session.pending > 0 || session.preparing || session.restoring) continue;
-      if (now - session.lastUsedAt < this.idleLimitMs) continue;
+      const retained = this.canRetain(uid);
+      if (retained && now - session.lastUsedAt < this.idleLimitMs) continue;
+      if (retained && now - session.lastUsedAt < this.retentionMs) {
+        if (session.connected() || session.client?.channel) session.suspendConnection();
+        continue;
+      }
       session.clearLocal();
       this.sessions.delete(uid);
       this.onEvict?.(uid);

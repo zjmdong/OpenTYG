@@ -28,6 +28,7 @@ The server signs and sets the `opentyg_session` cookie. Production attributes ar
 | `POST /api/auth/login-sms` | `mobile`, `smsCode`, `remember` | 短信登录 / SMS login |
 | `POST /api/auth/login-password` | `account`, `password`, `remember`, 可选 / optional `changeDeviceSmsCode` | 密码登录及平台设备验证 / Password login and platform device verification |
 | `GET /api/auth/session` | Cookie | 登录状态、用户及房产上下文 / Authentication, user, and property context |
+| `GET /api/bootstrap` | Cookie（未登录可访问 / optional） | 一次返回 `{meta, session}`，按会话隔离的收藏视图可随会话返回 / One startup round trip; same session ownership checks |
 | `POST /api/auth/logout` | 空对象 / Empty object + Cookie | 撤销账号的本服务会话，删除登录凭据，保留偏好 / Revoke this account's local sessions and saved credentials, retaining preferences |
 
 `remember` 仅布尔 `true` 启用记住。无效账号登录不会撤销另一个已登录会话。暂时的上游或存储错误应保留错误，不假定用户一定退出登录。
@@ -92,6 +93,16 @@ Rate-limit errors expose remaining seconds in `error.details.retryAfterSeconds` 
 
 有效会话可在加载期间读取此接口：`phase` 为 `idle`、`restoring`、`connecting`、`directory`、`retrying`、`ready` 或 `failed`；`step` 对应恢复登录、连接门禁、获取列表，`elapsedMs` 为本次准备耗时。状态轮询不延长会话的绝对有效期。
 
-`GET /api/doors` reuses a connected directory for up to 60 seconds, then prepares a fresh authenticated directory. `refresh=1` still forces preparation. Read-only platform requests can retry once after a network error or timeout; SMS, login, logout and OpenDoor commands are never automatically retried by this mechanism.
+`GET /api/doors` reuses a healthy directory for up to 60 seconds. Idle sockets are closed after 30 minutes, while the bounded in-memory login/configuration cache is retained for approximately 24 idle hours (maximum 200 accounts, with earlier LRU eviction). Local session expiry denies access immediately; the periodic sweep clears expired sessions' retained state. On reconnect, household permissions are re-queried before any OpenDoor is sent. Neither the 12-hour browser-session limit nor the 30-day remembered-session limit is extended.
 
-恢复登录和准备目录各有约 12 秒的网络等待预算；一次 `/api/doors` 请求中需要先恢复登录时，目录准备共用剩余的约 15 秒预算。超时保留记住的凭据并允许用户重试，不把临时网络异常当作退出登录。浏览器显示实际阶段和已等待秒数，不承诺上游的预计完成时间。
+单个读取、WebSocket 握手或配置响应的默认无响应超时约 950ms；单轮恢复/目录准备共用约 2.9 秒，最多尝试 3 次，无嵌套重试。正常推进的多阶段流程可以超过 950ms，但不能突破总预算。网络、磁盘、CPU 和上游可用性仍会影响实际耗时，这不是“任何情况下 3 秒内成功”的承诺。
+
+`refresh=1` explicitly creates a new UI directory context. Automatic reconnect preserves the UI context only if both household and the full physical-door/configuration fingerprint remain unchanged. The SDK uses a separate fresh connection directory internally. Changed endpoints invalidate the context, and a removed door never falls back to another index or device.
+
+`GET /api/auth/session` (also inside `/api/bootstrap`) may include `doorsPreview`, the cookie owner's last verified public display list and favorites. It contains no platform credentials or physical device address; `preview: true` indicates that recovery is needed. It is used only to render buttons promptly. A display snapshot never authorizes an opening: the server revalidates stale household permissions, reconnects, and resolves the stable door ID before sending. Preview data stays in memory and is not persisted by the browser or Service Worker.
+
+热点击直接提交 `POST /api/doors/open`，不再固定先请求一次目录。服务端最多在同一恢复预算内尝试 3 次“准备或明确未发送”的失败；开门命令一旦可能已排入发送队列，丢失回执、超时或断线均返回结果未知，绝不自动重发。业务拒绝、权限撤销也不重试。按钮会合并已有预热请求，目录上下文过期且已被服务端明确拒绝时可刷新后继续原来的点击，用户无需再按一次。
+
+正常开门回执仍保留单次 5 秒确认窗口；它不属于可重复发送的准备步骤。缩成 1 秒后盲目重发不能保证更快开门，反而可能重复操作。
+
+`连接准备耗时` logs contain phase, attempt count, total milliseconds and a bounded list of stage durations (`initialize`, `households`, `wsConnect`, `doorAuth`, `doorConfig`). `请求耗时` logs contain only the local API path and duration, including the single startup `/api/bootstrap` call. No accounts, tokens, authcodes, door addresses or request bodies are included. These timings distinguish local API latency from platform preparation latency without claiming to identify an unobserved customer-side network fault.

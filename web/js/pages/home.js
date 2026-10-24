@@ -273,7 +273,7 @@ export default {
 
     /* ---------------------------------------------------------- 启动 */
     renderAll();
-    if (!store.state.doors.length && !store.state.doorsError) {
+    if ((!store.state.doors.length || store.state.doorsPreview) && !store.state.doorsError) {
       reload(false);
     }
 

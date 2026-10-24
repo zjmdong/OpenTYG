@@ -481,7 +481,7 @@ export default {
     orderIds = orderedFromStore();
     updateHeader();
     renderBody();
-    if (!store.state.doors.length && !store.state.doorsError) reload(false);
+    if ((!store.state.doors.length || store.state.doorsPreview) && !store.state.doorsError) reload(false);
 
     return function destroy() {
       life.destroyed = true;

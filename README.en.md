@@ -21,7 +21,7 @@ The application interface is currently in Simplified Chinese; project documentat
 - **Mobile experience**: touch-friendly layouts, light and dark themes, PWA installation, and home screen instructions for iPhone.
 - **Account sign-in**: SMS verification, password login, platform-required device verification, and optional remembered sessions.
 - **Properties and doors**: switch between authorized properties, drag to reorder, rename doors, and keep up to five favorites on the home screen.
-- **Connection preparation**: prepare door connections after login and when returning to the foreground; check directory context and permissions before sending a command.
+- **Fast recovery**: display cached favorites promptly and retain a bounded login cache; one tap recovers pre-send connection failures while still checking current directory context and permissions.
 - **Private storage**: encrypt remembered login state and preferences on the server; upstream login tokens and door credentials are never returned to the browser.
 - **Simple deployment**: one container, one port, no npm runtime dependencies, a health check, and an HTTPS reverse proxy example.
 
