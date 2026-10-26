@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Published application release tag (for example v1.2.3)'
+        description: 'Published application release tag (for example v1.2.4)'
         required: true
-        default: v1.2.3
+        default: v1.2.4
       operation:
         description: 'Publish an image, or verify anonymous pulls after making it public'
         required: true
@@ -150,6 +150,15 @@ jobs:
           curl --retry 10 --retry-delay 1 --retry-all-errors --retry-max-time 30 --connect-timeout 3 --max-time 5 -fsS http://127.0.0.1:8787/api/health
           docker exec opentyg-image-check node deploy/healthcheck.mjs
           test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:8787/)" = 403
+          if [[ "$(printf '%s\n' "$VERSION" '1.2.4' | sort -V | head -n 1)" = '1.2.4' ]]; then
+            test "$(curl -sS -H 'Accept: text/html' -D "$RUNNER_TEMP/opentyg-redirect.headers" -o "$RUNNER_TEMP/opentyg-redirect.body" -w '%{http_code}' 'http://127.0.0.1:8787/?next=https://invalid.example')" = 303
+            grep -qi '^location: https://opentyg.example.com/' "$RUNNER_TEMP/opentyg-redirect.headers"
+            grep -qi '^cache-control: no-store' "$RUNNER_TEMP/opentyg-redirect.headers"
+            ! grep -qi '^set-cookie:' "$RUNNER_TEMP/opentyg-redirect.headers"
+            test ! -s "$RUNNER_TEMP/opentyg-redirect.body"
+            test "$(curl -sS -H 'Accept: text/html' -o /dev/null -w '%{http_code}' http://127.0.0.1:8787/api/bootstrap)" = 403
+            test "$(curl -sS -H 'Accept: text/html' -X POST -o /dev/null -w '%{http_code}' http://127.0.0.1:8787/)" = 403
+          fi
           curl -fsS -H 'Host: opentyg.example.com' http://127.0.0.1:8787/ > "$RUNNER_TEMP/opentyg-page.html"
           grep -q 'OpenTYG' "$RUNNER_TEMP/opentyg-page.html"
           echo "Verified linux/$ARCH: UID 10001, readonly root, mounted secret, persistent data, health endpoint, and home page." >> "$GITHUB_STEP_SUMMARY"

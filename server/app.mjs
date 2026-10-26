@@ -21,7 +21,7 @@ import { SessionRegistry, clearSessionCookie, readSessionCookie, setSessionCooki
 
 const HERE = fileURLToPath(new URL('.', import.meta.url));
 const WEB_ROOT = resolve(HERE, '../web');
-const APP_VERSION = '1.2.3';
+const APP_VERSION = '1.2.4';
 const MAX_BODY_BYTES = 64 * 1024;
 const MAX_NAME_LENGTH = 20;
 const DEFAULT_COOLDOWN_MS = 3000;
@@ -842,6 +842,12 @@ export async function createApp({
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     try {
       const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
+      const redirect = policy.navigationRedirect(req, url);
+      if (redirect) {
+        res.writeHead(303, { Location: redirect, 'Cache-Control': 'no-store', 'Content-Length': '0' });
+        res.end();
+        return;
+      }
       policy.check(req, url);
       if (url.pathname.startsWith('/api/')) {
         if (url.pathname.startsWith('/api/auth/') && req.method === 'POST') {

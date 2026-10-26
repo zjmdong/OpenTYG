@@ -17,6 +17,15 @@ export function requestPolicy({ publicOrigin = '', cookieSecure, localTest = fal
   if (!localTest && !secure) throw new Error('生产模式必须启用 Secure Cookie');
   return {
     secure,
+    navigationRedirect(req, url) {
+      // Only a browser's landing-page navigation gets a fixed canonical URL.
+      // Never serve the application, forward query strings, or relax API checks
+      // for an unrecognized Host. Behind the proxy the public Host must match.
+      if (!localTest && external && ['GET', 'HEAD'].includes(req.method)
+        && url.pathname === '/' && /\btext\/html\b/i.test(String(req.headers.accept || ''))
+        && String(req.headers.host || '').toLowerCase() !== external.host.toLowerCase()) return external.href;
+      return null;
+    },
     check(req, url) {
       if (external && String(req.headers.host || '').toLowerCase() !== external.host.toLowerCase() && url.pathname !== '/api/health') throw fail('FORBIDDEN');
       if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {

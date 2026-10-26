@@ -65,4 +65,6 @@ sudo docker compose up -d
 
 **打不开 / 403 / 502**：检查容器状态、反代目标、证书，以及公网地址和 Host 的端口是否一致。内部 HTTP 只供反代连接；登录请使用 HTTPS。
 
+浏览器直接打开内网 HTTP 根地址时，会自动跳转到配置的 HTTPS 地址。若 HTTPS 地址在内网打不开，检查路由器回流或内部 DNS，并让该域名指向可访问的 HTTPS 反代；不要改成 HTTP 登录。API 和静态资源仍要求正确的 Host；反代必须保留浏览器使用的域名和端口。
+
 更多：[Nginx 示例](../deploy/nginx-opentyg.conf) · [配置参考](configuration.md) · [隐私与运维](security.md)。默认兼容平台 HTTP / WS；公网 HTTPS 不会加密后端到平台的 HTTP 通信。

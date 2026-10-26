@@ -65,4 +65,6 @@ sudo docker compose up -d
 
 **Cannot open / 403 / 502:** check container status, proxy target, certificate, and matching public address and Host ports. Internal HTTP is for the proxy; sign in over HTTPS.
 
+Opening the internal HTTP root address in a browser redirects to the configured HTTPS address. If that address is unreachable on your LAN, check NAT loopback or internal DNS and route the domain to the HTTPS proxy. Keep sign-in on HTTPS. APIs and static assets still require the correct Host; the proxy must preserve the browser-facing domain and port.
+
 More: [Nginx example](../deploy/nginx-opentyg.conf) · [Configuration](configuration.md) · [Privacy and operations](security.md). Default platform HTTP / WS compatibility remains enabled; public HTTPS does not encrypt backend-to-platform HTTP.

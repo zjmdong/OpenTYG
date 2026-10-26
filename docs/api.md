@@ -12,6 +12,10 @@ This is a same-origin web application API, not a general cross-origin gateway. S
 
 Mutations require `Content-Type: application/json`, `X-OpenTYG-Request: 1`, and an `Origin` exactly matching `PUBLIC_ORIGIN`. Host must match the configured public domain and port, except for `/api/health`. The request marker is not authentication; protected endpoints also require a valid cookie. Cross-origin CORS is not provided.
 
+浏览器以 `Accept: text/html` 对其他 Host 的根路径 `/` 发起 GET/HEAD 导航时，返回不缓存的 303，跳到固定的 `PUBLIC_ORIGIN`，不转发查询参数，也不设置 Cookie。此导航提示不放宽 API、资源路径或写请求的校验。
+
+A GET/HEAD navigation to `/` with `Accept: text/html` on another Host receives a non-cacheable 303 to the fixed `PUBLIC_ORIGIN`, without forwarding query parameters or setting cookies. This navigation helper does not relax API, asset-path, or mutation checks.
+
 `opentyg_session` Cookie 由服务器签名并设置，不向脚本开放。生产为 HttpOnly、Secure、SameSite=Strict、Path=/。客户端不要自行构造会话 ID 或把 Cookie 写入日志。
 
 The server signs and sets the `opentyg_session` cookie. Production attributes are HttpOnly, Secure, SameSite=Strict, and Path=/. Do not fabricate session IDs or log cookies.

@@ -58,6 +58,10 @@ Behind a reverse proxy, additional short-window network limits may be shared by 
 
 Production keeps a fixed HTTPS `PUBLIC_ORIGIN`, Secure cookies, exact Host/Origin checks, request markers, and current directory validation. Restrict internal HTTP to loopback or a controlled private network. Default upstream HTTP/WS compatibility leaves backend-to-platform traffic unencrypted and can expose login and door credentials; browser HTTPS does not change this. The host allowlist restricts destinations but does not encrypt transport. Verify a working HTTPS/WSS upstream before disabling HTTP.
 
+直接打开其他 Host 的根地址时，仅为 GET/HEAD HTML 导航返回固定 HTTPS 入口的 303 跳转，不提供应用页面、Cookie 或私有数据，不携带原查询参数。此例外不适用于 API、静态资源和写请求；代理仍须保留正确的 Host。
+
+An HTML GET/HEAD navigation to the root on another Host receives only a 303 to the fixed HTTPS entry point, without an application page, cookie, private data, or the original query string. APIs, assets, and mutations retain their checks; proxies must still preserve the correct Host.
+
 上线前检查：域名与证书、代理保留端口和 Origin、内部端口隔离、文件所有者与权限、完整密钥备份、单实例运行、实际账号与门锁权限。关闭代理/CDN 私有响应缓存；避免请求体和凭据日志。日志默认留在标准输出并由 Docker 轮转，分享前仍要检查内容。项目不包含外部分析服务；部署时自行加入的监控、CDN、备份和日志服务也需审查数据去向。
 
 Before launch, check the domain and certificate, preserved ports and Origin, internal-port isolation, filesystem permissions, complete key backups, single-instance operation, and actual account/lock permissions. Disable private-response caching and avoid credential or body logging. Runtime logs go to stdout and are rotated by Docker; review them before sharing. No external analytics service is included. Assess data handling in any monitoring, CDN, backup, or logging service you add.
