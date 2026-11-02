@@ -13,6 +13,14 @@ Passwords and SMS codes are submitted through same-origin login requests and for
 
 Browser-only sessions last at most 12 hours and do not survive server restart. Remembered sessions have a 30-day absolute limit and persist the encrypted upstream state needed for restoration; the platform can invalidate them sooner. Restoration credentials may remain if another browser for the same account has a remembered session. Logout revokes all browser sessions for that account and removes saved login credentials while retaining preferences. Expired credentials without a remembered session are pruned periodically. Preferences have no automatic expiry; operators should define retention and deletion policies.
 
+当房产权查询明确返回主登录 token 过期（平台 `1002` / `Token过期`）时，应用自动删除该账号的内存登录状态、保存的登录凭据及本服务会话，并提示重新登录。同账号其他设备上的旧会话也会失效；其他账号不受影响。收藏、排序、自定义名称和设置保留，使用原账号重新登录即可恢复。单个浏览器 Cookie 过期、普通网络故障或其他业务拒绝不会因此撤销其他有效登录。
+
+When a property-permission query explicitly reports account-token expiry (platform `1002` / `Token过期`), the app removes that account's in-memory login, saved credentials, and local sessions, then asks the user to sign in again. Existing sessions on other devices for the same account are also revoked; other accounts are unaffected. Favorites, ordering, custom names, and settings remain available after signing in with the same account. A single expired browser cookie, ordinary network failure, or other business rejection does not trigger this account-wide cleanup.
+
+当前集成的 SDK 没有主登录凭据续期接口；“记住登录”不是 30 天始终免登录的保证。房产临时 token 与主登录 token 分开处理：临时 token 过期时，在已有连接准备时限内重新查询房产权并获取一次新授权；仍失败则返回错误，不无限刷新，也不重复发送开门指令。若刷新过程确认主 token 也已过期，则进入上述重新登录流程。
+
+The integrated SDK has no account-token renewal endpoint, so remembered login does not guarantee 30 uninterrupted days of access. Property tokens are handled separately: an expired temporary token triggers one permission refresh and authorization retry within the existing preparation deadline. A repeated failure is surfaced without an endless refresh loop or replaying a door command. If that refresh confirms account-token expiry, the sign-in flow above applies.
+
 ## 磁盘数据 / Data on disk
 
 | 文件 / File | 内容与保护 / Contents and protection |
@@ -57,10 +65,6 @@ Behind a reverse proxy, additional short-window network limits may be shared by 
 生产保持固定 HTTPS `PUBLIC_ORIGIN`、Secure Cookie、精确 Host/Origin 校验、请求标记和当前目录校验。内部 HTTP 仅限回环或受控内网。默认上游 HTTP/WS 兼容意味着后端到平台的流量未加密，可能暴露登录与门禁凭据；浏览器 HTTPS 无法改变此事实。允许名单限制目标主机，但不提供传输加密。上游可用 HTTPS/WSS 时应验证兼容性再关闭 HTTP。
 
 Production keeps a fixed HTTPS `PUBLIC_ORIGIN`, Secure cookies, exact Host/Origin checks, request markers, and current directory validation. Restrict internal HTTP to loopback or a controlled private network. Default upstream HTTP/WS compatibility leaves backend-to-platform traffic unencrypted and can expose login and door credentials; browser HTTPS does not change this. The host allowlist restricts destinations but does not encrypt transport. Verify a working HTTPS/WSS upstream before disabling HTTP.
-
-直接打开其他 Host 的根地址时，仅为 GET/HEAD HTML 导航返回固定 HTTPS 入口的 303 跳转，不提供应用页面、Cookie 或私有数据，不携带原查询参数。此例外不适用于 API、静态资源和写请求；代理仍须保留正确的 Host。
-
-An HTML GET/HEAD navigation to the root on another Host receives only a 303 to the fixed HTTPS entry point, without an application page, cookie, private data, or the original query string. APIs, assets, and mutations retain their checks; proxies must still preserve the correct Host.
 
 上线前检查：域名与证书、代理保留端口和 Origin、内部端口隔离、文件所有者与权限、完整密钥备份、单实例运行、实际账号与门锁权限。关闭代理/CDN 私有响应缓存；避免请求体和凭据日志。日志默认留在标准输出并由 Docker 轮转，分享前仍要检查内容。项目不包含外部分析服务；部署时自行加入的监控、CDN、备份和日志服务也需审查数据去向。
 

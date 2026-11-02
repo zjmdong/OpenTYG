@@ -90,13 +90,13 @@ async function boot() {
       renderFatal(err);
       return;
     }
-    store.clearSession();
+    store.clearSession({ message: '登录状态已失效，请重新登录。收藏和设置已保留。' });
   }
 
   // 3) 会话失效统一处理
   setUnauthorizedHandler(() => {
     const wasAuthed = store.state.authenticated;
-    store.clearSession();
+    store.clearSession({ message: '登录状态已失效，请重新登录。收藏和设置已保留。' });
     if (wasAuthed) toast('登录状态已失效，请重新登录', 'warn');
     navigate('/login', { replace: true });
   });

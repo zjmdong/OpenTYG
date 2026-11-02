@@ -21,7 +21,7 @@ import { SessionRegistry, clearSessionCookie, readSessionCookie, setSessionCooki
 
 const HERE = fileURLToPath(new URL('.', import.meta.url));
 const WEB_ROOT = resolve(HERE, '../web');
-const APP_VERSION = '1.2.4';
+const APP_VERSION = '1.2.5';
 const MAX_BODY_BYTES = 64 * 1024;
 const MAX_NAME_LENGTH = 20;
 const DEFAULT_COOLDOWN_MS = 3000;
@@ -249,6 +249,15 @@ export async function createApp({
     return holder.session;
   }
 
+  // Caller holds this user's operation lock. Keep preferences and other users.
+  async function expireUpstreamLogin(uid) {
+    pool.drop(uid);
+    registry.dropByUid(uid);
+    try { await store.removeUser(uid); }
+    catch { throw fail('CREDENTIAL_STORE_UNAVAILABLE'); }
+    logger.info('平台登录已过期，已清理失效登录状态');
+  }
+
   /** 登录成功收尾：改挂正式 uid、按需落盘凭据、下发 cookie、自动准备门禁。 */
   async function finishLogin({ session, uid, account, remember, entry, res, secure, send, sessionPayload }) {
     session.uid = uid;
@@ -314,6 +323,7 @@ export async function createApp({
       // 凭据落盘放在目录加载之后，确保保存的是最终状态。
       if (persistLogin) await store.writeUser(uid, record());
     } catch (error) {
+      if (error.expiredUpstreamLogin === true) { await expireUpstreamLogin(uid); throw error; }
       logger.warn('登录后自动加载门禁失败', { user: uid.slice(0, 8), code: toAppError(error).code });
       if (prefsValue.selectedHouseholdId) await store.writePrefs(uid, prefsValue).catch(() => {});
     }
@@ -393,7 +403,8 @@ export async function createApp({
         const sanitized = session.serialize();
         if (Buffer.from(record.session,'base64').toString() !== sanitized.toString()) { record.session = sanitized.toString('base64'); await store.writeUser(entry.uid,record); }
       } catch (error) {
-        // 只结束当前内存会话，**保留凭据文件与会话条目**：
+        // 临时故障只结束当前内存会话，保留凭据文件与会话条目。
+        // 明确的平台 token 过期由 routeGuarded 在用户锁内统一撤销。
         //  - 恢复失败的常见原因（上游未确认、入口环境临时变化、网络异常）都可能自行恢复；
         //  - 删凭据会让用户在环境恢复后仍被迫重新登录；
         //  - 删会话条目则会让「环境恢复后自动续上」彻底不可能（每次都要用户手动登录）。
@@ -498,6 +509,7 @@ export async function createApp({
         const session = await requireUser();
         sendSession({ ...(await sessionPayload(session)), restored: true });
       } catch (error) {
+        if (error.expiredUpstreamLogin === true) throw error;
         if (!['SESSION_EXPIRED','SAVED_LOGIN_INVALID','NOT_LOGGED_IN'].includes(error.code)) throw error;
         clearSessionCookie(res,{secure:secure()});
         sendSession({ authenticated: false, user: null, households: [], selectedHouseholdId: null, restored: false });
@@ -797,6 +809,16 @@ export async function createApp({
     if (uid && userLocks.has(uid)) throw fail('BUSY');
     if (uid) userLocks.add(uid);
     try { await routeUnlocked(req, res, url); }
+    catch (error) {
+      const wrapped = toAppError(error);
+      // Only a confirmed account-token expiry revokes this account. A stale
+      // cookie, network failure, or a failed login to another account must not.
+      const signingIn = ['/api/auth/login-password','/api/auth/login-sms'].includes(url.pathname);
+      if (uid && wrapped.expiredUpstreamLogin === true && !signingIn) {
+        await expireUpstreamLogin(uid);
+      }
+      throw wrapped;
+    }
     finally { if (uid) userLocks.delete(uid); }
   }
 
@@ -842,12 +864,6 @@ export async function createApp({
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     try {
       const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
-      const redirect = policy.navigationRedirect(req, url);
-      if (redirect) {
-        res.writeHead(303, { Location: redirect, 'Cache-Control': 'no-store', 'Content-Length': '0' });
-        res.end();
-        return;
-      }
       policy.check(req, url);
       if (url.pathname.startsWith('/api/')) {
         if (url.pathname.startsWith('/api/auth/') && req.method === 'POST') {

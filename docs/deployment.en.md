@@ -54,17 +54,19 @@ sudo docker compose stop                    # Stop
 sudo docker compose start                   # Start
 ```
 
-**Upgrade:** back up, change the `image` version in `docker-compose.yml`, then:
+**Upgrade:** back up, set `image` in `docker-compose.yml` to `ghcr.io/zjmdong/opentyg:1.2.5`, then:
 
 ```sh
 sudo docker compose pull
 sudo docker compose up -d
 ```
 
+Keep the original data directory, secret, and UID:GID. Fully close and reopen the phone app after upgrading. For an environment-variable template, update `OPENTYG_VERSION` in `.env` instead.
+
 **Backup / migrate:** stop the app and back up Compose plus its configured data directory and secret file, including hidden files and custom paths. Preserve the original key, ownership, and permissions on restore. Run only one instance per data directory.
 
 **Cannot open / 403 / 502:** check container status, proxy target, certificate, and matching public address and Host ports. Internal HTTP is for the proxy; sign in over HTTPS.
 
-Opening the internal HTTP root address in a browser redirects to the configured HTTPS address. If that address is unreachable on your LAN, check NAT loopback or internal DNS and route the domain to the HTTPS proxy. Keep sign-in on HTTPS. APIs and static assets still require the correct Host; the proxy must preserve the browser-facing domain and port.
+**Login expired:** sign in again; favorites and settings are retained. Do not manually delete `data/` or the secret. Platform credentials may expire before 30 days.
 
 More: [Nginx example](../deploy/nginx-opentyg.conf) · [Configuration](configuration.md) · [Privacy and operations](security.md). Default platform HTTP / WS compatibility remains enabled; public HTTPS does not encrypt backend-to-platform HTTP.

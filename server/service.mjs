@@ -212,7 +212,15 @@ export class Session {
           await client.getHouseholds();
           this.householdsVerifiedAt = Date.now();
         }
-        return client.getDoors(householdId);
+        try { return await client.getDoors(householdId); }
+        catch (error) {
+          if (error.code !== 'HOUSEHOLD_TOKEN_EXPIRED') throw error;
+          // A room token is separate from the account token. Refresh it once
+          // within this preparation's existing deadline, before any OpenDoor.
+          await client.getHouseholds();
+          this.householdsVerifiedAt = Date.now();
+          return client.getDoors(householdId);
+        }
       }, { timeoutMs, attempts });
       const fingerprint = doors => JSON.stringify(doors.map(d => ({ ...d })).sort((a,b) => a.id.localeCompare(b.id)));
       const sameDirectory = !forceNewContext && this.selectedHouseholdId === householdId && this.directoryId && fingerprint(this.doors) === fingerprint(directory.doors);
@@ -227,6 +235,7 @@ export class Session {
     } catch (error) {
       if (error?.code === 'HOUSEHOLD_UNAVAILABLE' || error?.code === 'HOUSEHOLD_NOT_FOUND') throw error;
       const wrapped = toAppError(error);
+      if (wrapped.code === 'SESSION_EXPIRED') throw wrapped;
       if (wrapped.code === 'HOUSEHOLD_UNAVAILABLE') throw wrapped;
       if (['HTTP_TIMEOUT','WS_CONNECT_TIMEOUT','WS_TIMEOUT'].includes(wrapped.code)) {
         throw new AppError('DOORS_LOAD_FAILED', '门禁服务暂时无法连接，自动恢复未成功；登录状态已保留', { cause: wrapped.code, retryable: retryablePreparation(error) });

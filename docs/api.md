@@ -12,10 +12,6 @@ This is a same-origin web application API, not a general cross-origin gateway. S
 
 Mutations require `Content-Type: application/json`, `X-OpenTYG-Request: 1`, and an `Origin` exactly matching `PUBLIC_ORIGIN`. Host must match the configured public domain and port, except for `/api/health`. The request marker is not authentication; protected endpoints also require a valid cookie. Cross-origin CORS is not provided.
 
-浏览器以 `Accept: text/html` 对其他 Host 的根路径 `/` 发起 GET/HEAD 导航时，返回不缓存的 303，跳到固定的 `PUBLIC_ORIGIN`，不转发查询参数，也不设置 Cookie。此导航提示不放宽 API、资源路径或写请求的校验。
-
-A GET/HEAD navigation to `/` with `Accept: text/html` on another Host receives a non-cacheable 303 to the fixed `PUBLIC_ORIGIN`, without forwarding query parameters or setting cookies. This navigation helper does not relax API, asset-path, or mutation checks.
-
 `opentyg_session` Cookie 由服务器签名并设置，不向脚本开放。生产为 HttpOnly、Secure、SameSite=Strict、Path=/。客户端不要自行构造会话 ID 或把 Cookie 写入日志。
 
 The server signs and sets the `opentyg_session` cookie. Production attributes are HttpOnly, Secure, SameSite=Strict, and Path=/. Do not fabricate session IDs or log cookies.
@@ -38,6 +34,14 @@ The server signs and sets the `opentyg_session` cookie. Production attributes ar
 `remember` 仅布尔 `true` 启用记住。无效账号登录不会撤销另一个已登录会话。暂时的上游或存储错误应保留错误，不假定用户一定退出登录。
 
 Only boolean `true` enables remembered login. A failed login must not revoke another valid session. Preserve temporary upstream and storage errors rather than assuming they mean the user is signed out.
+
+房产权查询明确返回主登录 token 过期（平台 `1002` / `Token过期`）时，受影响请求返回 HTTP 401 / `SESSION_EXPIRED`，包括 `/api/bootstrap` 和 `/api/auth/session` 的恢复过程。服务端撤销该账号的本服务会话、删除失效登录凭据并清除当前 Cookie；客户端应转到登录页，不能继续循环恢复同一失效登录。收藏和设置保留，同账号其他设备的旧会话也失效，其他账号不受影响。仅浏览器 Cookie 到期不触发这种账号级清理。
+
+An explicit account-token expiry from the property-permission query (platform `1002` / `Token过期`) returns HTTP 401 / `SESSION_EXPIRED`, including during restoration through `/api/bootstrap` or `/api/auth/session`. The server revokes that account's local sessions, removes invalid saved credentials, and clears the current cookie. Clients should show sign-in rather than repeatedly restore the same invalid login. Preferences are retained; old sessions for the same account on other devices are revoked, while other accounts are unaffected. Browser-cookie expiry alone does not trigger account-wide cleanup.
+
+房产临时 token 失效时，服务端在原有连接准备时限内刷新一次，且不会重复发送开门指令。普通网络错误、`DOORS_LOAD_FAILED` 或 `UPSTREAM_REJECTED` 本身不表示主登录凭据过期；不要据此强制注销。当前集成的 SDK 没有主登录凭据续期接口，重新登录仍可能早于“记住登录”的 30 天上限。
+
+An expired property token is refreshed once within the existing preparation deadline, without replaying a door command. Ordinary network errors, `DOORS_LOAD_FAILED`, and `UPSTREAM_REJECTED` do not by themselves mean the account token has expired; do not force sign-out for them. The integrated SDK has no account-token renewal endpoint, so sign-in may be required before the 30-day remembered-session limit.
 
 ## 用户与目录 / User and directory
 

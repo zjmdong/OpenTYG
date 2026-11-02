@@ -12,6 +12,7 @@ const DEFAULT_COOLDOWN_MS = 3000;
 const state = {
   meta: null,                 // GET /api/meta
   authenticated: false,
+  sessionNotice: '',
   user: null,                 // { name, account, userAccount, loginType, maskedAccount }
   households: [],
   selectedHouseholdId: null,
@@ -69,6 +70,7 @@ export const store = {
     state.doors = []; state.favorites = []; state.directoryId = null; state.doorsLoadedAt = 0;
     const d = data && typeof data === 'object' ? data : {};
     state.authenticated = !!d.authenticated;
+    if (state.authenticated) state.sessionNotice = '';
     state.user = d.user || null;
     state.households = Array.isArray(d.households) ? d.households.slice() : [];
     state.selectedHouseholdId = d.selectedHouseholdId || null;
@@ -89,9 +91,10 @@ export const store = {
     this.notify();
   },
 
-  clearSession() {
+  clearSession({ message = '' } = {}) {
     generation += 1;
     state.authenticated = false;
+    state.sessionNotice = message;
     state.doorsPreview = false;
     state.user = null;
     state.households = [];

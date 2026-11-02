@@ -38,6 +38,7 @@ export default {
                 <div class="login-hero__sub">手机开门 · 智能门禁</div>
               </div>
             </div>
+            ${store.state.sessionNotice ? `<div class="form-error" role="alert">${esc(store.state.sessionNotice)}</div>` : ''}
             <div class="tabs" role="tablist">
               <button type="button" class="tab-item is-active" data-tab="sms" role="tab">短信登录</button>
               <button type="button" class="tab-item" data-tab="password" role="tab">账号密码登录</button>
@@ -65,7 +66,7 @@ export default {
 
               <label class="check">
                 <input type="checkbox" id="sms-remember" checked>
-                <span>记住登录（30 天内免登录）</span>
+                <span>记住登录（最长 30 天，凭据失效需重新登录）</span>
               </label>
 
               <button type="submit" class="btn btn--primary btn--block" id="sms-submit">登录</button>
@@ -97,7 +98,7 @@ export default {
 
               <label class="check">
                 <input type="checkbox" id="pw-remember" checked>
-                <span>记住登录（30 天内免登录）</span>
+                <span>记住登录（最长 30 天，凭据失效需重新登录）</span>
               </label>
 
               <button type="submit" class="btn btn--primary btn--block" id="pw-submit">登录</button>

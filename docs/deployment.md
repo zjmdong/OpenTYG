@@ -54,17 +54,19 @@ sudo docker compose stop                    # 停止服务
 sudo docker compose start                   # 启动服务
 ```
 
-**升级**：先备份，在 `docker-compose.yml` 中修改 `image` 的版本号，然后：
+**升级**：先备份，将 `docker-compose.yml` 的 `image` 改为 `ghcr.io/zjmdong/opentyg:1.2.5`，然后：
 
 ```sh
 sudo docker compose pull
 sudo docker compose up -d
 ```
 
+保留原数据目录、密钥和 UID:GID，升级后完全关闭手机应用再打开。使用环境变量模板的部署，改 `.env` 中的 `OPENTYG_VERSION` 即可。
+
 **备份 / 迁移**：停服，备份 Compose 文件及其中指定的数据目录、密钥文件（包含隐藏文件）；自定义目录也要一起备份。恢复时保留原密钥、文件所有者和权限。同一数据目录只运行一个实例。
 
 **打不开 / 403 / 502**：检查容器状态、反代目标、证书，以及公网地址和 Host 的端口是否一致。内部 HTTP 只供反代连接；登录请使用 HTTPS。
 
-浏览器直接打开内网 HTTP 根地址时，会自动跳转到配置的 HTTPS 地址。若 HTTPS 地址在内网打不开，检查路由器回流或内部 DNS，并让该域名指向可访问的 HTTPS 反代；不要改成 HTTP 登录。API 和静态资源仍要求正确的 Host；反代必须保留浏览器使用的域名和端口。
+**提示登录状态已失效**：重新登录即可，收藏和设置会保留；无需手工删除 `data/` 或密钥。平台凭据可能早于 30 天失效。
 
 更多：[Nginx 示例](../deploy/nginx-opentyg.conf) · [配置参考](configuration.md) · [隐私与运维](security.md)。默认兼容平台 HTTP / WS；公网 HTTPS 不会加密后端到平台的 HTTP 通信。

@@ -58,6 +58,7 @@ const APP_ERRORS = {
   CLIENT_CLOSED: ['会话已关闭，请重新登录', 410],
   NOT_INITIALIZED: ['服务尚未就绪，请稍后重试', 503],
   UPSTREAM_REJECTED: ['桃园谷服务拒绝了本次操作', 502],
+  HOUSEHOLD_TOKEN_EXPIRED: ['房产授权暂时不可用，请稍后重试', 502],
   HTTP_ERROR: ['无法连接桃园谷服务，请检查服务器网络', 502],
   HTTP_TIMEOUT: ['桃园谷服务响应超时，请稍后重试', 502],
   HTTP_STATUS: ['桃园谷服务返回异常状态', 502],
@@ -91,9 +92,10 @@ export function toAppError(error) {
   if (error instanceof AppError) return error;
   const code = typeof error?.code === 'string' ? error.code : '';
   if (code && APP_ERRORS[code]) {
-    // 上游明确给出 reason 时保留，便于用户排查（例如"短信获取次数过多"）。
     const mapped = APP_ERRORS[code][0];
-    return new AppError(code, mapped, {}, APP_ERRORS[code][1]);
+    const wrapped = new AppError(code, mapped, {}, APP_ERRORS[code][1]);
+    if (code === 'SESSION_EXPIRED' && error.expiredUpstreamLogin === true) wrapped.expiredUpstreamLogin = true;
+    return wrapped;
   }
   return new AppError('INTERNAL_ERROR', APP_ERRORS.INTERNAL_ERROR[0], {}, 500);
 }

@@ -19,7 +19,7 @@ The application interface is currently in Simplified Chinese; project documentat
 ## Features
 
 - **Mobile experience**: touch-friendly layouts, light and dark themes, PWA installation, and home screen instructions for iPhone.
-- **Account sign-in**: SMS verification, password login, platform-required device verification, and optional remembered sessions.
+- **Account sign-in**: SMS verification, password login, and platform-required device verification. Remember sessions for up to 30 days; earlier platform credential expiry prompts sign-in again while preserving favorites and settings.
 - **Properties and doors**: switch between authorized properties, drag to reorder, rename doors, and keep up to five favorites on the home screen.
 - **Fast recovery**: display cached favorites promptly and retain a bounded login cache; one tap recovers pre-send connection failures while still checking current directory context and permissions.
 - **Private storage**: encrypt remembered login state and preferences on the server; upstream login tokens and door credentials are never returned to the browser.
@@ -54,6 +54,8 @@ flowchart LR
 ```
 
 TYG Core SDK is an **unofficial protocol adapter**, not an SDK supplied or maintained by Taoyuangu. The application embeds a server-oriented adaptation under `server/vendor/tyg-core-sdk/`, with host restrictions, stable door identifiers, and credential handling changes. Its source differs from the standalone SDK. The web application currently provides door access and does not expose the standalone SDK's intercom features.
+
+The integrated SDK has no account-token renewal endpoint. Expired account credentials therefore require sign-in again, with invalid login state removed automatically. Expired property credentials are refreshed once within the existing connection deadline; ordinary network failures do not force sign-out. See the [credential lifecycle](docs/security.md#凭据生命周期--credential-lifecycle).
 
 For your own clients, see the [opentyg-sdk branch](https://github.com/zjmdong/OpenTYG/tree/opentyg-sdk) and its [Taoyuangu platform API reference](https://github.com/zjmdong/OpenTYG/blob/opentyg-sdk/docs/platform-api.md). That reference describes platform HTTP, WebSocket, XML, and SIP/RTP protocols. The `docs/api.md` file in this branch documents OpenTYG's own backend.
 

@@ -64,6 +64,9 @@ function resultOK(r) {
 function codeOK(r) {
   if (text(r.code) !== '0') throw new TygError('UPSTREAM_REJECTED', text(r.message || r.reason) || '原服务业务校验失败', originalError(r), 502);
 }
+function tokenExpired(r) {
+  return text(r.code) === '1002' && /^(?:token\s*(?:已)?过期|token\s+(?:has\s+)?expired)[。.!]?$/i.test(text(r.message || r.reason).trim());
+}
 const validityNames = { '0': '已停用', '1': '有效', '2': '已过期，联系物业续期', '3': '需付费开通', '4': '付费权限已到期' };
 const mask = value => value ? `${String(value).slice(0, 3)}…（${String(value).length} 位）` : null;
 
@@ -421,7 +424,14 @@ export class TygClient {
   }
   getHouseholds() { return this.exclusive(async () => {
     this.assertLogin(); this.clearDoor(); this.households = [];
-    const r = await this.post(ROUTES.households, { type: '1', openCode: '' }, this.session.token); codeOK(r);
+    const r = await this.post(ROUTES.households, { type: '1', openCode: '' }, this.session.token);
+    if (tokenExpired(r)) {
+      const error = new TygError('SESSION_EXPIRED', '登录状态已失效，请重新登录', {}, 401);
+      // Internal provenance: a local cookie expiry must not revoke other logins.
+      error.expiredUpstreamLogin = true;
+      throw error;
+    }
+    codeOK(r);
     const list = [];
     if (!Array.isArray(r.data?.areaList)) throw new TygError('PROTOCOL_ERROR', '房产列表缺少 data.areaList');
     for (const area of r.data.areaList) for (const room of items(area.list)) {
@@ -446,7 +456,9 @@ export class TygClient {
     return h;
   }
   async requestDoorAuth(h, options) {
-    const r = await this.post(ROUTES.doorAuth, { mobile: h.mobile }, h.token, options); codeOK(r);
+    const r = await this.post(ROUTES.doorAuth, { mobile: h.mobile }, h.token, options);
+    if (tokenExpired(r)) throw new TygError('HOUSEHOLD_TOKEN_EXPIRED', '房产授权已过期', {}, 502);
+    codeOK(r);
     return required(r.data?.data, '开门 authcode');
   }
   async authorize(h) {
