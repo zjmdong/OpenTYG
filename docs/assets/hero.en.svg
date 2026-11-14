@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-labelledby="title desc">
+  <title id="title">TYG Core SDK — Door access and intercom.</title>
+  <desc id="desc">A Node.js protocol library. TygClient connects the door channel and the intercom stack.</desc>
+  <rect width="1200" height="360" rx="24" fill="#101827"/>
+  <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif">
+    <g id="wordmark">
+      <text x="60" y="78" fill="#a8b7d0" font-size="19" letter-spacing="3">NODE.JS PROTOCOL ADAPTER</text>
+      <text x="56" y="177" fill="#ffffff" font-size="76" font-weight="700" letter-spacing="-3">TYG Core <tspan fill="#83aaff">SDK</tspan></text>
+      <text x="60" y="247" fill="#ffffff" font-size="32" font-weight="600">Door access. Intercom. Your code.</text>
+      <path d="M60 300h46" stroke="#83aaff" stroke-width="4"/>
+      <text x="122" y="307" fill="#a8b7d0" font-size="20">ES modules · TypeScript declarations</text>
+    </g>
+    <g id="protocol-map" text-anchor="middle">
+      <path d="M935 158v36m0 0H820v30m115-30h115v30" fill="none" stroke="#83aaff" stroke-width="2"/>
+      <rect x="822" y="81" width="226" height="77" rx="12" fill="#2f6bed"/>
+      <text x="935" y="130" fill="#ffffff" font-size="30" font-weight="600">TygClient</text>
+      <rect x="724" y="224" width="192" height="62" rx="10" fill="#1b2941" stroke="#34435d"/>
+      <text x="820" y="263" fill="#ffffff" font-size="24">HTTP / WS</text>
+      <rect x="954" y="224" width="192" height="62" rx="10" fill="#1b2941" stroke="#34435d"/>
+      <text x="1050" y="263" fill="#ffffff" font-size="24">SIP / RTP</text>
+    </g>
+  </g>
+</svg>

@@ -1,12 +1,14 @@
-# SDK 使用参考 / SDK reference
+# SDK 使用参考
 
-[平台 HTTP / WS](platform-api.md) · [对讲协议](intercom-protocol.md) · [类型声明](../src/tyg-client.d.ts)
+[文档](README.md) / SDK 参考 · [English](sdk-reference.en.md)
+
+[构造参数](#options) · [核心方法](#core-methods) · [对讲](#intercom) · [会话保存](#persistence) · [错误处理](#errors)
 
 本页是 Node.js 库调用参考，平台原始字段与协议请查看另外两份文档。ES modules，Node.js 22.4+；Node.js 24 为建议运行版本。SDK 不启动 HTTP 服务器，也不提供浏览器用户认证。
 
-**English:** This is a library reference; platform wire protocols are documented separately. Use one `TygClient` per account, keep it in a trusted Node.js process, serialize business operations, and supply your own application authentication, authorization, rate limits, and persistence.
+<a id="options"></a>
 
-## 构造参数 / ClientOptions
+## 构造参数
 
 ```js
 import { TygClient, TygError, DEFAULT_ORIGIN, ROUTES, envelope } from 'tyg-core-sdk';
@@ -32,7 +34,9 @@ const sdk = new TygClient({ lastLoginOs: '4' });
 
 上述默认超时与冷却是 SDK 策略，不是平台公开承诺。`fetchImpl` 只覆盖 HTTP；原生门禁 WebSocket 和 SIP/媒体 UDP 需另外约束网络出站访问。构造参数应由可信配置提供，不接受浏览器任意地址。
 
-## 核心方法 / Core methods
+<a id="core-methods"></a>
+
+## 核心方法
 
 | 调用 | 返回 | 行为 |
 | --- | --- | --- |
@@ -52,7 +56,7 @@ const sdk = new TygClient({ lastLoginOs: '4' });
 | `logout()` | `Promise<{ loggedOut: true }>` | 先清理本地状态；有 sessionToken 时远程退出。对象仍可重新登录。 |
 | `close()` | `void（同步）` | 同步清理本地资源，不调用远程退出；已关闭实例不可复用。 |
 
-### 短信登录 / SMS flow
+### 短信登录
 
 ```js
 await sdk.initialize();
@@ -64,7 +68,7 @@ await sdk.loginSms(mobileFromUser, smsCodeFromUser);
 
 challengeId 是 SDK 当前实例的本地引用，有效上下文默认 600 秒；短信成功后消费。它不是平台 authcode。`retryAfterSeconds=60` 是本地提示，SDK 本身不提供账号级短信限流或公网密码防爆破；集成方必须另行实现。
 
-### 目录与开门 / Directory and an explicit command
+### 目录与开门
 
 ```js
 const household = (await sdk.getHouseholds()).find(item => item.available);
@@ -83,7 +87,9 @@ const receipt = await sdk.openDoor({
 
 `household-1`、`door-1` 等引用只在当前 SDK 列表有效，不是持久平台 ID。`directoryId` 每次下载变化，切房产或重新加载后旧引用应作废。SDK 拒绝 stale/foreign context、任意设备和未连接通道。同一实例业务请求并发返回 `BUSY`，不要给开门意图建立隐式重发队列。
 
-## 对讲方法 / Intercom methods
+<a id="intercom"></a>
+
+## 对讲方法
 
 | 调用 | 返回 | 行为 |
 | --- | --- | --- |
@@ -96,7 +102,7 @@ const receipt = await sdk.openDoor({
 | `writeIntercomAudio(pcm)` | `void` | 每包 320 字节，160 个小端 16 位采样，即 8 kHz 单声道 20 ms。最多缓存约 200 ms，未协商媒体时不发送。 |
 | `closeIntercom()` | `void` | 同步清理媒体、计时器与个人配置；发送尽力挂断/注销。需确定挂断结果时先 await hangupIntercom。 |
 
-### 监看接入 / Monitoring integration
+### 监看接入
 
 ```js
 const configuration = await sdk.prepareIntercom();
@@ -112,9 +118,11 @@ sdk.callIntercom({ configurationId: configuration.configurationId,
 try { await sdk.hangupIntercom(); } finally { off(); sdk.closeIntercom(); }
 ```
 
-`callIntercom()` 返回启动状态，后续通过事件/state 获取最终状态。此示例的呼叫与挂断语句代表不同用户动作，不应复制成连续自动呼叫。monitor 不收发音频。扩展 talk 必须显式使用 `mode:'talk'`，由用户授权音频输入；`writeIntercomAudio` 每帧 320 字节 PCM16LE，8 kHz mono / 20 ms。实际语音兼容性需针对设备验证。
+`callIntercom()` 返回启动状态，后续通过事件/state 获取最终状态。此示例的呼叫与挂断语句代表不同用户动作，不应复制成连续自动呼叫。monitor 不收发音频；默认模式为 `talk`，音频输入须经用户授权。`writeIntercomAudio` 每帧 320 字节 PCM16LE，8 kHz mono / 20 ms。实际语音兼容性需针对设备验证。
 
-## 登录会话保存 / Session persistence
+<a id="persistence"></a>
+
+## 登录会话保存
 
 | 调用 | 返回 | 秘密边界 |
 | --- | --- | --- |
@@ -142,7 +150,9 @@ if (storedBytes) {
 
 DPAPI 使用 Windows 当前用户，不支持 Linux/macOS/NAS，不降级为明文。`status()` 返回是否保存，`load()` 无记录返回 null，`clear()` 只删除保存记录、不注销内存会话。指定目录须由当前用户独占；存储保护不能抵御已控制该 Windows 用户的攻击者。清零 Buffer 也不能保证所有 JavaScript 字符串副本被清除。
 
-## 错误与资源释放 / Errors and cleanup
+<a id="errors"></a>
+
+## 错误与资源释放
 
 `TygError` 有 `code`、`message`、`details`、`status`；这些是 **SDK 的错误结构，不是平台统一 JSON 格式**。原始 reason/message 可能包含敏感信息，日志仅记录允许的错误码和脱敏统计。
 
@@ -162,4 +172,4 @@ DPAPI 使用 Windows 当前用户，不支持 Linux/macOS/NAS，不降级为明�
 
 `logout()` 先清理本地会话，然后尽力请求平台退出；即使远程失败也应清理你的前端和存储。`close()` 只释放本地资源，不代替平台注销。`closeIntercom()` 释放个人配置与媒体，但门禁登录仍可继续使用。始终在 finally 中清理资源，不能把状态监听错误吞掉后继续显示已接通。
 
-All tokens, session bytes, credentials, and audio/video must remain within trusted components. Neither `getState()` nor a successful call status proves a physical door or media result. See [security and integration](security.md) before exposing SDK capabilities to a web application.
+完整流程图见 [How it works](how-it-works.md)，应用层责任见 [安全与集成](security.md)。

@@ -1,6 +1,8 @@
 # 桃园谷对讲 XML、SIP 与媒体协议 / Intercom protocols
 
-[平台 HTTP / WS](platform-api.md) · [SDK 参考](sdk-reference.md) · [免责声明](../DISCLAIMER.md)
+[文档](README.md) / 对讲协议 · [Docs](README.en.md)
+
+[XML 配置](#xml-provisioning) · [SIP 注册与出呼](#sip) · [媒体](#media) · [NAT 穿透](#nat) · [实现边界](#implementation-limits)
 
 本页描述平台配置与信令协议，依据公开客户端资料与独立 SDK v0.3.4 整理，客户端基线为 Android 1.3.8；不是官方发布的 API 文档。字段仅覆盖当前实现消费范围，示例均为占位值。本页没有原浏览器原型的媒体票据或本地 HTTP/WS API。
 
@@ -10,18 +12,16 @@
 
 先通过 JSON 配置取得 `outerTalkbackSystemUrl`，完成账号登录，遵守 `talkForbidStatus` 的账号限制。对讲需要账户密码进行 XML 鉴权；普通 HTTP 登录 token 不可替代密码或个人 SIP 凭据。短信登录响应有时携带 Base64 账户密码，Base64 不是加密。响应缺少密码时，由用户从安全输入提供，不得获取他人密码。
 
-```text
-AuthcodeRequest
-→ AuthenticationRequest（沿用 Cookie）
-→ ConfigInformRequest
-→ MobileDownloadConfigRequest
-→ 解析个人配置及 PHONE_BOOK
-→ ConfigUpdateNotifyRequest
-→ SIP REGISTER / Digest
-→ 用户选择设备，INVITE / SDP
-→ RTP / RTCP / 可选 ICE
-→ CANCEL 或 BYE，释放媒体
+```mermaid
+flowchart TB
+    Seed["AuthcodeRequest<br/>获取 safeCode"] --> Auth["AuthenticationRequest<br/>密码摘要鉴权，沿用 Cookie"]
+    Auth --> Info["ConfigInformRequest<br/>查询配置版本"]
+    Info --> Config["MobileDownloadConfigRequest<br/>个人 SIP 配置与 PHONE_BOOK"]
+    Config --> Notify["ConfigUpdateNotifyRequest<br/>确认配置版本"]
+    classDef default fill:#eef4ff,stroke:#8ca9dc,color:#101827
 ```
+
+配置完成后再注册 SIP、按用户选择出呼、协商媒体，结束时 CANCEL/BYE。完整呼叫与释放流程见 [How it works](how-it-works.md)。
 
 ## 2. XML HTTP 传输 / XML over HTTP
 
@@ -38,6 +38,8 @@ Cookie: <PLATFORM_COOKIE_NAME=VALUE>
 第一次 seed 请求可以没有 Cookie，之后收集平台 `Set-Cookie` 的 name=value 并在同一配置会话中沿用。不要复制 cookie 属性到请求头，不要将 Cookie 和个人配置返回浏览器或写日志。XML 字符串需要转义 `& < > " '`。响应有 `faultCode` 时，非字符串 `0` 视为失败；还应校验消息类型与必需字段。不要启用 XML 外部实体；此 SDK 拒绝 DOCTYPE/ENTITY 并限制 XML 到 2 MiB。
 
 不同部署的响应 msgType 可能为 `...Response` 等平台形式，不应按 Java 反编译模型的 `Rsp` 类名推断服务返回名。下列响应表只说明消费字段，不能用占位示例代替真实结构校验。HTTPS 入口保留正常证书校验。
+
+<a id="xml-provisioning"></a>
 
 ## 3. 五类平台 XML 消息 / Five provisioning messages
 
@@ -221,6 +223,8 @@ SDK 保留 Type 为 `2/3/4/5/6/9` 且有 Code 的设备，跳过住户分机和�
 
 缺少个人必需字段或地址/端口不合法时应失败，不允许降级使用硬编码公共账号。配置下载成功不证明 SIP 或媒体连通。
 
+<a id="sip"></a>
+
 ## 4. SIP 注册与出呼 / Registration and calls
 
 平台兼容实现使用 **SIP/2.0、UDP、IPv4**。域名、账号、主代理和端口来自个人配置。浏览器沙盒无法直接使用 SIP UDP，需要可信的本地/服务端协议层。本库不提供公网浏览器媒体网关。
@@ -274,6 +278,8 @@ Content-Length: 0
 
 UDP 丢包重传属于同一事务，沿用 Call-ID/branch；不能当作再次用户呼叫。每个 SDK 实例只有一个并发出呼。默认未接听约 60 秒请求取消；后续状态通过事件读取，方法返回启动状态不等于接通。SIP 注册成功和接听回执分别只证明信令阶段成功。
 
+<a id="media"></a>
+
 ## 5. SDP、RTP 与 RTCP / Media
 
 SDK 提供 `monitor` 和 `talk` 两种模式。监看需要视频，音频固定 inactive，不启用麦克风、不收发音频。扩展 talk 模式使用 G.711；真实双向语音是否可用仍依赖平台、设备和网络。
@@ -312,6 +318,8 @@ a=sendrecv
 
 媒体方向从远端 SDP 读取；不要把远端 sendonly 误当本机发送许可。端点限定在协商地址和端口，不接受浏览器指定任意 UDP 目的地。调试应观察脱敏包数、首帧时间和媒体状态，不能保存住户音视频或完整含凭据的 SDP。
 
+<a id="nat"></a>
+
 ## 6. ICE、STUN、TURN 与网络 / NAT traversal
 
 ICE 只有在真实远端 SDP 包含凭据、候选且协商正确时才成立。普通 STUN Binding 探测不等于通过 ICE 认证检查、提名或媒体连通。ICE username fragment/password 不是 SIP 密码，不能相互替代。组件号、rtcp-mux 与 RTP/RTCP 候选需一致。
@@ -319,6 +327,8 @@ ICE 只有在真实远端 SDP 包含凭据、候选且协商正确时才成立�
 SDK 不预设公共 STUN/TURN；需要时由集成方显式提供自己有权使用的服务和短期凭据。跨 NAT 的 SDP 私网地址可能不可达，Docker/NAS 的 UDP 路由和防火墙也须单独配置。网页 HTTPS 反向代理只负责浏览器 HTTP/WSS，不会自动代理 SIP/RTP UDP。不要因信令成功就保证视频或声音。
 
 当系统 DNS 返回 198.18/198.19 Fake-IP 时，v0.3.4 的 SIP 解析会尝试 `https://dns.alidns.com/resolve`，再尝试 `https://dns.google/resolve`；查询会发送 SIP 代理域名给该解析服务。普通解析不触发此回退。该行为应纳入你的网络和隐私评估；本 SDK 不修改用户 TUN 配置，必要时由集成方调整解析策略。
+
+<a id="implementation-limits"></a>
 
 ## 7. 当前实现边界 / Implementation limits
 

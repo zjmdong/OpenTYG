@@ -1,10 +1,14 @@
 # 桃园谷平台 HTTP 与 WebSocket API / Platform API reference
 
-[中文 README](../README.md) · [English README](../README.en.md) · [OpenAPI 3.1](platform-openapi.json) · [对讲协议](intercom-protocol.md)
+[文档](README.md) / 平台 HTTP 与 WS · [Docs](README.en.md) · [OpenAPI 3.1](platform-openapi.json)
+
+[服务发现](#discovery) · [凭据与信封](#envelope) · [调用时序](#sequence) · [HTTP 路径](#endpoints) · [门禁 WebSocket](#door-websocket)
 
 **非官方整理文档。** 描述桃园谷平台实际使用的协议，依据公开客户端资料与 SDK v0.3.4 实现整理，客户端分析基线为 Android 1.3.8；不是桃园谷官方发布的开发者文档，也没有平台稳定性保证。字段、地址和服务行为应以合法授权环境的实际返回为准。此处不描述 OpenTYG 或原本地原型服务器的 API。请先阅读 [免责声明](../DISCLAIMER.md)。全部示例为占位值，不含真实凭据。
 
 **English:** This independently maintained reference documents platform wire protocols, not OpenTYG backend routes. It is based on SDK v0.3.4 and public-client protocol analysis (Android 1.3.8), is not official developer documentation, and carries no platform stability guarantee. Examples are placeholders. The HTTP OpenAPI file describes only JSON POST operations; WebSocket and XML/SIP/RTP are separate protocols.
+
+<a id="discovery"></a>
 
 ## 1. 服务入口 / Service discovery
 
@@ -20,6 +24,8 @@
 返回值是动态 URL，不应硬编码其他服务主机。HTTP 路径以 `/` 开头，使用 `new URL(path, returnedBase)` 从主机根路径解析；不要重复拼接 `/uums` 或 `/cpsApi`。缺少前三个键时，SDK 回退到 `<origin>/<service>/`。集成方应限制允许访问的主机和协议，拒绝地址中的用户名/密码及不可信重定向；上游配置不是自动可信的 SSRF 白名单。
 
 默认兼容 HTTP/WS。它们传输的密码和令牌可能为明文；你自己的网站使用 HTTPS 不会加密服务器到上游这一段。不得为了连接而关闭证书校验。仅在平台确认支持并验证兼容后使用 HTTPS/WSS。
+
+<a id="envelope"></a>
 
 ## 2. JSON 请求信封 / Request envelope
 
@@ -52,29 +58,36 @@ prelogin = MD5_UPPER("EA3vWPmfxhWUit2s" + ms)
 
 Three credentials have distinct roles: login token for property listing/logout; selected-property token for door authorization and the WebSocket URL; door authcode for WebSocket messages. They are not interchangeable. Lifetimes are not defined by this reference; revalidate against the platform rather than assuming a fixed TTL.
 
+<a id="sequence"></a>
+
 ## 3. 调用顺序 / Request sequence
 
 ```mermaid
 sequenceDiagram
     participant C as Your client
-    participant U as UUMS
-    participant P as CPS API
+    participant H as Platform HTTP
     participant W as Door WebSocket
-    C->>U: getAllConfigsServlet
-    C->>U: password login OR human captcha + SMS login
-    U-->>C: sessionToken
-    C->>P: queryOpenHouseholdList/v2 (sessionToken)
-    P-->>C: authorized properties + householdToken
-    C->>P: getAuthcode (householdToken, property mobile)
-    P-->>C: authcode
-    C->>W: connect URL with householdToken
+    C->>H: Bootstrap: getAllConfigsServlet
+    C->>H: UUMS: password or human captcha + SMS login
+    H-->>C: sessionToken
+    C->>H: CPS: queryOpenHouseholdList/v2 (sessionToken)
+    H-->>C: Authorized properties + householdToken
+    par Door authorization
+        C->>H: getAuthcode (householdToken, property mobile)
+        H-->>C: authcode
+    and WebSocket handshake
+        C->>W: Connect with householdToken
+    end
     C->>W: MobileDownloadConfig (authcode)
-    W-->>C: door configuration
-    C->>W: OpenDoor after explicit user action
-    W-->>C: platform acknowledgment
+    W-->>C: Door configuration
+    Note over C,W: Explicit user selection from current directory
+    C->>W: OpenDoor once
+    W-->>C: Acknowledgment or unknown result on timeout
 ```
 
 登录两种方式任选其一。验证码由用户人工填写；不要自动识别或批量发送短信。房产中只有 `valid=1` 的条目可继续门禁操作，房产 `mobile` 可能与登录时输入号码不同，应使用该房产返回值。
+
+<a id="endpoints"></a>
 
 ## 4. HTTP 路径总览 / Endpoint index
 
@@ -627,6 +640,8 @@ MD5_UPPER(MD5_UPPER("LXJ_SJM") + "_" + seed.authCode)
 | `2` | 已过期，需要物业续期 | 否 |
 | `3` | 需付费开通 | 否 |
 | `4` | 付费权限已到期 | 否 |
+
+<a id="door-websocket"></a>
 
 ## 6. 门禁 WebSocket / Door WebSocket
 

@@ -1,39 +1,56 @@
-<div align="center">
-  <h1>TYG Core SDK</h1>
-  <p>An unofficial Node.js protocol SDK for authorized Taoyuangu door access and intercom development.</p>
-  <p><a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT"></a> <img src="https://img.shields.io/badge/SDK-0.3.4-blue" alt="SDK 0.3.4"> <img src="https://img.shields.io/badge/Node.js-22.4%2B-339933" alt="Node.js 22.4 or newer"></p>
-  <p><a href="README.md">简体中文</a> · <strong>English</strong></p>
-</div>
+<p align="center">
+  <img src="docs/assets/hero.en.svg" width="100%" alt="TYG Core SDK — An unofficial Node.js protocol adapter for Taoyuangu door access and intercom.">
+</p>
 
-This branch publishes **TYG Core SDK v0.3.4**, the latest standalone SDK version organized for this project. This is not an official Taoyuangu SDK or platform version. It supports service discovery, captchas and login, property authorization, WebSocket door access, XML provisioning, SIP signaling, and RTP media integration. The protocol baseline is the Taoyuangu Android client 1.3.8; server behavior and hardware compatibility can change.
+<p align="center">
+  <a href="package.json"><img src="https://img.shields.io/badge/SDK-0.3.4-2f6bed?style=flat-square" alt="SDK 0.3.4"></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/Node.js-22.4%2B-2f6bed?style=flat-square" alt="Node.js 22.4 or newer"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2f6bed?style=flat-square" alt="MIT License"></a>
+</p>
 
-**This SDK and its documentation have no affiliation, partnership, or authorization relationship with Taoyuangu or its affiliates and are not officially endorsed or supported.** Protocol information is organized from publicly accessible client and related materials; the code is an independent adapter. Official APKs, decompiled source, native binary libraries, and real user credentials are not included. Public availability does not imply permission to use a service or redistribute materials. Use responsibly, only with accounts and devices you own or are explicitly authorized to operate. Users bear responsibility for their actions and consequences independently of the author. To the extent permitted by applicable law, the author and contributors accept no liability arising from use or misuse. See the [disclaimer](DISCLAIMER.md) and [provenance](docs/provenance.md).
+<p align="center">
+  <a href="README.md">简体中文</a> · <strong>English</strong><br>
+  <a href="#quick-start">Quick start</a> · <a href="#how-it-works">How it works</a> · <a href="docs/README.en.md">Docs</a> · <a href="https://github.com/zjmdong/OpenTYG/tree/main">Web app</a>
+</p>
 
-## Start with the platform protocols
+**TYG Core SDK is a Taoyuangu protocol adapter for Node.js clients.** It covers service discovery, sign-in, door directories, and SIP intercom, with ES modules, TypeScript declarations, and protocol references. Build your own client here; for a deployable web app, use the [OpenTYG main branch](https://github.com/zjmdong/OpenTYG/tree/main).
 
-The focus is the **actual Taoyuangu platform endpoints and wire protocols**, so you can implement a client without this SDK. These references are independently maintained; they are **not official developer documentation or a platform stability commitment**.
+> Unofficial, with no affiliation, partnership, or authorization relationship with Taoyuangu or its affiliates. Use only accounts and devices you own or are explicitly authorized to operate. References are based on Android client 1.3.8 and standalone SDK v0.3.4, without a platform stability guarantee. Read the [disclaimer](DISCLAIMER.md).
 
-| Reference | Contents |
+## Capabilities
+
+| Area | Current scope |
 | --- | --- |
-| [Platform HTTP and WebSocket API](docs/platform-api.md) | Ten JSON POST endpoints, dynamic service hosts, credential roles, field tables, responses, door configuration, and commands |
-| [HTTP OpenAPI 3.1](docs/platform-openapi.json) | Only the ten platform JSON HTTP routes; import with an OpenAPI 3.1 compatible tool |
-| [XML / SIP / RTP / ICE protocols](docs/intercom-protocol.md) | Five XML message types, personal SIP credentials, registration, outbound calls, media, and limitations |
-| [SDK reference](docs/sdk-reference.md) | `TygClient` methods, types, session storage, and error handling |
-| [Security and integration](docs/security.md) | Secrets, plaintext upstream traffic, host controls, authentication limits, and command semantics |
-| [Provenance](docs/provenance.md) / [Third-party notices](THIRD_PARTY_NOTICES.md) | Source boundaries, versions, and dependency licenses |
+| Accounts and permissions | Service discovery, human captcha verification, SMS/password sign-in, device verification, property authorization |
+| Doors | WebSocket directories, current-context checks, a single command and its acknowledgment |
+| Intercom | Personal XML configuration, UDP/IPv4 SIP outbound calls, monitoring, G.711 audio, H.264 reception |
+| Integration | State/media events, type declarations, optional Windows DPAPI login storage |
 
-The platform protocols do not use `/api/clients/...`, `X-Local-Key`, or OpenTYG browser cookies. XML, WebSocket, and SIP/RTP are documented separately from the HTTP OpenAPI file. Business success codes differ by endpoint: SMS delivery uses `code=1`, while login uses `code=0`. Detailed protocol field descriptions are primarily in Chinese; identifiers, schemas, examples, and the integration overview are also usable from English.
+One outbound call at a time. Incoming calls, TCP/TLS SIP, and SRTP are unsupported. Browsers cannot run the SIP UDP module directly. Verify speech and NAT traversal for your devices and network. [Full limits →](docs/intercom-protocol.md#implementation-limits)
 
-## Capabilities and limits
+## How it works
 
-- **Door access**: service discovery, human-entered captchas, SMS or password login, device verification, property permissions, door configuration, and individual door commands.
-- **Intercom**: XML provisioning, UDP/IPv4 SIP, Digest authentication, outbound monitoring, G.711 audio, H.264 reception, RTCP, SDP renegotiation, and explicitly configured ICE/STUN/TURN.
-- **Integration**: ES modules, TypeScript declarations, state and media events, and optional Windows DPAPI session storage.
-- **Limits**: Node.js only; browsers cannot directly operate the SIP UDP adapter. One concurrent outbound call; no incoming-call acceptance, TCP/TLS SIP, SRTP, automatic backup-proxy switching, or proactive Session-Timer refresh. Extended voice and NAT traversal depend on the platform, device, and network and are not guaranteed on all installations.
+```mermaid
+flowchart TB
+    App["Your Node.js app"] -->|"Methods / events"| SDK["TygClient"]
+    SDK -->|"HTTP / WebSocket"| Door["Accounts and doors"]
+    SDK -->|"XML / SIP / RTP"| Call["Intercom and media"]
+    classDef default fill:#eef4ff,stroke:#8ca9dc,color:#101827
+    classDef core fill:#2f6bed,stroke:#2f6bed,color:#ffffff
+    class SDK core
+```
 
-## Install
+1. **Discover and sign in**: load dynamic service addresses and obtain account credentials through user verification.
+2. **Select and prepare**: query authorized properties; fetch the door authcode and connect WebSocket in parallel, then download the directory.
+3. **Act explicitly**: send a command only after the user selects a door from the current directory. Intercom separately needs personal configuration, SIP registration, and a user-initiated call.
 
-Node.js 22.4 or newer is required; Node.js 24 is recommended. This version is distributed through Git, not the npm registry.
+Account tokens, property tokens, and door authcodes are not interchangeable. SDK references such as `household-1` and `door-1` belong to the current list, not persistent device identities. A lost acknowledgment after dispatch means an unknown result, without automatic replay.
+
+**[Architecture →](docs/architecture.en.md)** · **[Door, intercom, and restoration flows →](docs/how-it-works.en.md)**
+
+## Quick start
+
+Requires **Node.js 22.4+**; Node.js 24 is recommended. Distributed through Git, not published to npm:
 
 ```sh
 git clone --branch opentyg-sdk --single-branch https://github.com/zjmdong/OpenTYG.git OpenTYG-SDK
@@ -41,41 +58,47 @@ cd OpenTYG-SDK
 npm ci --ignore-scripts
 ```
 
-To use it in another Node.js project, check out the branch and install the local package:
-
-```sh
-npm install --ignore-scripts /path/to/OpenTYG-SDK
-```
-
-## Quick start
-
-This example queries the authorized directory only. It **does not send SMS or open a door**. Obtain the password from secure user input or a credential store; never embed it in source, logs, or commits.
+This example reads a directory without sending SMS or opening a door. Supply credentials from trusted input:
 
 ```js
-import { TygClient } from 'tyg-core-sdk';
+import { TygClient } from './src/tyg-client.mjs';
 
-const sdk = new TygClient({ lastLoginOs: '4' });
-try {
-  await sdk.initialize();
-  await sdk.loginPassword(accountFromSecureInput, passwordFromSecureInput);
-  const households = await sdk.getHouseholds();
-  const household = households.find(item => item.available);
-  if (!household) throw new Error('No authorized property is available');
-  const directory = await sdk.getDoors(household.id);
-  // Present directory.doors and the current directory context to the user.
-} finally {
-  sdk.close(); // Local cleanup; use logout() for platform logout.
+async function listDoors(account, password) {
+  const sdk = new TygClient({ lastLoginOs: '4' });
+  try {
+    await sdk.initialize();
+    await sdk.loginPassword(account, password);
+    const home = (await sdk.getHouseholds()).find(h => h.available);
+    if (!home) throw new Error('No authorized property');
+    return (await sdk.getDoors(home.id)).doors;
+  } finally {
+    sdk.close();
+  }
 }
 ```
 
-See [examples/list-doors.mjs](examples/list-doors.mjs) for a runnable read-only example. SMS flow: `createCaptcha → human reads and enters the image code → sendSms → human enters the SMS code → loginSms`. The SDK does not solve or bypass verification challenges. After an explicit user choice, call `openDoor` with the current `householdId`, `directoryId`, and `doorId`; see the [SDK reference](docs/sdk-reference.md).
+The [runnable example](examples/list-doors.mjs) reads `TYG_ACCOUNT` and `TYG_PASSWORD` from a trusted environment and prints only the door count. It still contacts the real platform. `close()` releases local resources; use `logout()` for remote sign-out.
 
-## Relationship to the application
+For another project, check out this branch and run `npm install --ignore-scripts /path/to/OpenTYG-SDK`, then import from `tyg-core-sdk`.
 
-The [main branch](https://github.com/zjmdong/OpenTYG/tree/main) contains the deployable OpenTYG web/PWA application. This branch contains the SDK library and platform references, without a web server, customer configuration, runtime logs, or field reports. Main embeds a server-specific SDK adaptation, including stable door identifiers. This branch preserves the standalone v0.3.4 core source; do not replace main's vendor directory directly with it.
+## Documentation
 
-## Security, contributions, and license
+| Task | Start here |
+| --- | --- |
+| Understand modules and complete operations | [Architecture](docs/architecture.en.md) · [How it works](docs/how-it-works.en.md) |
+| Use SDK methods, events, and errors | [SDK reference](docs/sdk-reference.en.md) · [Types](src/tyg-client.d.ts) |
+| Implement platform HTTP / WebSocket | [Protocol reference](docs/platform-api.md) · [OpenAPI 3.1](docs/platform-openapi.json) |
+| Integrate intercom, media, and NAT traversal | [XML / SIP / RTP](docs/intercom-protocol.md) |
+| Design account protection and persistence | [Security and integration](docs/security.en.md) |
+| Check provenance and licensing | [Provenance](docs/provenance.md) · [Third-party notices](THIRD_PARTY_NOTICES.md) |
 
-This SDK is not a complete public authentication service. Integrators must provide SMS/password limits, browser sessions, CSRF protection, host restrictions, encrypted persistence, and operation auditing. `serializeLoginSession()` **contains tokens and potentially an account password and does not encrypt them**. Never write those bytes directly to a file, send them to browsers, or log them. Optional Windows storage uses DPAPI; other systems require their own trusted encrypted store.
+Protocol field references use Chinese explanations with English headings and wire names. OpenAPI covers only ten JSON HTTP paths; WebSocket, XML, and SIP/RTP are documented separately. These are not the web app's `/api/*` routes. [All docs →](docs/README.en.md)
 
-Use [Issues](https://github.com/zjmdong/OpenTYG/issues) for ordinary reports, read [CONTRIBUTING.md](CONTRIBUTING.md) before contributing, and follow [SECURITY.md](SECURITY.md) for vulnerabilities. Original code uses [MIT](LICENSE); dependencies retain their [respective licenses](THIRD_PARTY_NOTICES.md). MIT grants no rights to third-party services, accounts, materials, hardware, or trademarks.
+## Before integrating
+
+- **Keep secrets in trusted processes**: `serializeLoginSession()` includes tokens and possibly the account password. Its output is unencrypted until a trusted store encrypts it.
+- **Provide application protections**: account isolation, rate limits, browser sessions, CSRF, outbound host restrictions, and sanitized logging are integration responsibilities.
+- **Respect transport boundaries**: defaults allow HTTP/WS; SIP Digest does not encrypt signaling or RTP. This is not end-to-end encryption.
+- **Do not swap branch implementations**: main embeds changes for stable door IDs and host restrictions; this branch preserves the standalone v0.3.4 core.
+
+Use [Issues](https://github.com/zjmdong/OpenTYG/issues) for ordinary problems, [Contributing](CONTRIBUTING.md) for changes, and [SECURITY.md](SECURITY.md) for private vulnerability reports. Original code is [MIT](LICENSE); dependencies retain their licenses. Official APKs, decompiled source, and real credentials are excluded.
