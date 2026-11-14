@@ -48,6 +48,23 @@ Screenshots show the existing interface. The production app includes neither a d
 
 Door access requires a network connection. Recovery retries preparation and failures confirmed to precede dispatch. If a command may have been sent but no acknowledgment arrives, the result is unknown and the app does not resend it automatically. A platform success response does not prove that the physical lock opened.
 
+## How it works
+
+```mermaid
+flowchart TB
+    UI["Browser / PWA"] -->|"Same-origin HTTPS API"| App["OpenTYG backend"]
+    App -->|"SDK · HTTP / WS"| Platform["Taoyuangu platform"]
+    classDef default fill:#eef4ff,stroke:#8ca9dc,color:#101827
+    classDef core fill:#2f6bed,stroke:#2f6bed,color:#ffffff
+    class App core
+```
+
+1. **Sign in and select a property**: the browser gets a local session cookie; upstream credentials remain on the backend.
+2. **Prepare the directory**: the backend verifies permissions and loads authorization and doors. Cached favorites may appear first, but grant no authority.
+3. **Tap once**: validate the current directory and stable door ID, reconnect if needed, then send. A possibly sent command is never replayed automatically.
+
+The reverse proxy terminates HTTPS and uses controlled private HTTP to the service. Default upstream HTTP/WS can still be plaintext. **[Architecture →](docs/architecture.en.md)** · **[Door sequence, retries, and session restoration →](docs/how-it-works.en.md)**
+
 ## Quick start
 
 On a Linux server or NAS, prepare **Docker + the Docker Compose plugin**, **curl, OpenSSL, an HTTPS domain, and its certificate**, then run:
@@ -73,7 +90,7 @@ The installer creates Compose configuration and a first-time secret; no source c
 | --- | --- |
 | Install, upgrade, migrate, or troubleshoot | [Deployment](docs/deployment.en.md) |
 | Configure ports, secrets, and environment variables | [Configuration](docs/configuration.en.md) |
-| Read the code and follow door operations | [Architecture](docs/architecture.en.md) |
+| Read the code and follow door operations | [Architecture](docs/architecture.en.md) · [How it works](docs/how-it-works.en.md) |
 | Understand sessions, privacy, and backups | [Privacy and operations](docs/security.en.md) |
 | Change the web client or use its backend | [Backend API](docs/api.en.md) · [Contributing](CONTRIBUTING.en.md) |
 | Build your own client on the platform protocol | [Standalone TYG SDK](https://github.com/zjmdong/OpenTYG/tree/opentyg-sdk) |

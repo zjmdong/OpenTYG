@@ -39,6 +39,8 @@ The frontend uses native HTML, CSS, ES modules, and hash routes. No bundler, sep
 
 ## A door operation
 
+See [How it works](how-it-works.en.md) for sequence and decision diagrams. The steps below summarize source responsibilities.
+
 1. The browser submits the door ID, `householdId`, and `directoryId`.
 2. The backend checks the session, selected property, directory context, cooldown, and per-account serialization.
 3. If reconnection is needed, it verifies property permissions and resolves the same stable door ID.

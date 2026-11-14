@@ -39,6 +39,8 @@ flowchart TB
 
 ## 一次开门如何完成
 
+完整时序与分支图见 [How it works](how-it-works.md)。以下概括源码职责。
+
 1. 浏览器提交门 ID、房产 `householdId` 和目录 `directoryId`。
 2. 后端检查会话、当前房产、目录上下文、冷却和账号串行操作约束。
 3. 需要恢复连接时，重新验证房产权并定位同一个稳定门 ID。

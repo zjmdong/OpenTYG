@@ -13,6 +13,7 @@ Start with deployment for a new installation. For an existing service, jump to u
 ## Develop and contribute
 
 - **[Architecture](architecture.en.md)** — Data flow, source layout, SDK relationship, and connection recovery.
+- **[How it works](how-it-works.en.md)** — Door sequence, dispatch boundary, and session restoration.
 - **[Backend API](api.en.md)** — Sessions, properties, directories, door commands, and errors.
 - **[Contributing](../CONTRIBUTING.en.md)** — Local setup, verification, and reporting issues.
 

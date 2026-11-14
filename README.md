@@ -48,6 +48,23 @@
 
 开门需要联网。连接恢复只重试准备阶段和确认尚未发送的失败；指令可能已发出却没有回执时，会提示结果未知，不自动重发。平台成功回执也不等于物理门锁一定开启。
 
+## How it works
+
+```mermaid
+flowchart TB
+    UI["浏览器 / PWA"] -->|"同源 HTTPS API"| App["OpenTYG 后端"]
+    App -->|"SDK · HTTP / WS"| Platform["桃园谷平台"]
+    classDef default fill:#eef4ff,stroke:#8ca9dc,color:#101827
+    classDef core fill:#2f6bed,stroke:#2f6bed,color:#ffffff
+    class App core
+```
+
+1. **登录与选房产**：浏览器拿到本服务的会话 Cookie，上游凭据留在后端。
+2. **准备门禁**：后端查询权限、获取鉴权和目录；首页可先显示旧收藏，但显示缓存不授予开门权限。
+3. **点按一次**：校验当前目录和稳定门 ID，必要时恢复连接，再发送指令。可能已发送的指令不会自动重发。
+
+HTTPS 在反向代理终止，代理到服务走受控内网 HTTP；默认上游 HTTP/WS 仍可能为明文。**[架构与模块 →](docs/architecture.md)** · **[开门时序、重试与会话恢复 →](docs/how-it-works.md)**
+
 ## 快速开始
 
 准备一台 Linux 服务器或 NAS，安装 **Docker + Docker Compose 插件**，备好 **curl、OpenSSL、HTTPS 域名及证书**，然后运行：
@@ -73,7 +90,7 @@ curl -fsSL -o install.sh https://raw.githubusercontent.com/zjmdong/OpenTYG/main/
 | --- | --- |
 | 安装、升级、迁移或排障 | [部署指南](docs/deployment.md) |
 | 调整端口、密钥与环境变量 | [配置参考](docs/configuration.md) |
-| 阅读源码、理解开门流程 | [架构说明](docs/architecture.md) |
+| 阅读源码、理解开门流程 | [架构说明](docs/architecture.md) · [How it works](docs/how-it-works.md) |
 | 了解登录状态、隐私与备份边界 | [隐私与运维](docs/security.md) |
 | 修改网页或接入本应用后端 | [后端 API](docs/api.md) · [贡献指南](CONTRIBUTING.md) |
 | 用底层协议开发自己的客户端 | [独立 TYG SDK](https://github.com/zjmdong/OpenTYG/tree/opentyg-sdk) |
