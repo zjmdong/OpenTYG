@@ -22,4 +22,4 @@ Relevant areas include account isolation, authorization, sessions and credential
 
 维护重点为 `main` 当前版本，不承诺旧版本安全回补。默认 HTTP/WS 上游的传输边界已在 [隐私与运维](docs/security.md) 中说明；发现超出该已知边界的实际漏洞仍欢迎报告。项目未承诺无漏洞、合规认证或安全 SLA。
 
-Maintenance focuses on the current `main` branch, without promised backports to older versions. The default HTTP/WS upstream boundary is documented in [privacy and operations](docs/security.md); reports of vulnerabilities beyond that known boundary are welcome. No vulnerability-free guarantee, compliance certification, or security SLA is offered.
+Maintenance focuses on the current `main` branch, without promised backports to older versions. The default HTTP/WS upstream boundary is documented in [privacy and operations](docs/security.en.md); reports of vulnerabilities beyond that known boundary are welcome. No vulnerability-free guarantee, compliance certification, or security SLA is offered.

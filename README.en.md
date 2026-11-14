@@ -1,108 +1,93 @@
-<div align="center">
-  <img src="web/icons/icon-192.png" width="96" height="96" alt="OpenTYG">
-  <h1>OpenTYG</h1>
-  <p>Your existing Taoyuangu door access, in a browser and on your home screen.</p>
-  <p>
-    <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT License"></a>
-    <img src="https://img.shields.io/badge/Node.js-24%2B-339933" alt="Node.js 24 or newer">
-    <img src="https://img.shields.io/badge/mobile-PWA-5A0FC8" alt="Mobile PWA">
-  </p>
-  <p><a href="README.md">简体中文</a> · <strong>English</strong></p>
-</div>
+<p align="center">
+  <img src="docs/assets/hero.en.svg" width="100%" alt="OpenTYG — Your existing Taoyuangu door access, in a browser and on your home screen.">
+</p>
 
-OpenTYG is a self-hosted web application for signing in with an existing Taoyuangu account, selecting a property, organizing frequently used doors, and requesting remote door access. One Node.js service hosts the frontend and backend. Deploy with Docker without a frontend build or a separate database.
+<p align="center">
+  <a href="https://github.com/zjmdong/OpenTYG/releases"><img src="https://img.shields.io/github/v/release/zjmdong/OpenTYG?filter=v*&style=flat-square&color=2f6bed&label=release" alt="Latest app release"></a>
+  <a href="https://github.com/zjmdong/OpenTYG/actions/workflows/verify.yml"><img src="https://github.com/zjmdong/OpenTYG/actions/workflows/verify.yml/badge.svg" alt="Build and installer verification"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2f6bed?style=flat-square" alt="MIT License"></a>
+</p>
 
-**This application has no affiliation, partnership, or authorization relationship with Taoyuangu or its affiliates. It is not endorsed or supported by the official platform.** An existing account and valid door permissions are required; the application does not grant or bypass platform permissions. Use it responsibly, only with accounts and devices you own or are explicitly authorized to operate, and comply with applicable laws, platform terms, and property rules. Users are responsible for their actions and consequences, independently of the project author. To the extent permitted by applicable law, the author and contributors accept no liability arising from use or misuse. See the [disclaimer](DISCLAIMER.md).
+<p align="center">
+  <a href="README.md">简体中文</a> · <strong>English</strong><br>
+  <a href="#quick-start">Quick start</a> · <a href="docs/README.en.md">Docs</a> · <a href="https://github.com/zjmdong/OpenTYG/releases">Releases</a> · <a href="https://github.com/zjmdong/OpenTYG/issues">Feedback</a>
+</p>
 
-The application interface is currently in Simplified Chinese; project documentation is available in Chinese and English.
+**OpenTYG is a self-hosted web client for Taoyuangu door access.** Sign in with your existing account, keep frequently used doors on the home page, and tap to open from a mobile browser or home-screen app. Runs in one Docker container, without a separate database or frontend build.
 
-## Features
+> An unofficial project with no affiliation, partnership, or authorization relationship with Taoyuangu or its affiliates. An existing account and valid door permissions are required. Operate only devices you own or are explicitly authorized to use. Read the [disclaimer](DISCLAIMER.md).
 
-- **Mobile experience**: touch-friendly layouts, light and dark themes, PWA installation, and home screen instructions for iPhone.
-- **Account sign-in**: SMS verification, password login, and platform-required device verification. Remember sessions for up to 30 days; earlier platform credential expiry prompts sign-in again while preserving favorites and settings.
-- **Properties and doors**: switch between authorized properties, drag to reorder, rename doors, and keep up to five favorites on the home screen.
-- **Fast recovery**: display cached favorites promptly and retain a bounded login cache; one tap recovers pre-send connection failures while still checking current directory context and permissions.
-- **Private storage**: encrypt remembered login state and preferences on the server; upstream login tokens and door credentials are never returned to the browser.
-- **Simple deployment**: one container, one port, no npm runtime dependencies, a health check, and an HTTPS reverse proxy example.
+## A look inside
 
-## Screenshots
+<p align="center">
+  <a href="docs/screenshots/home.png"><img src="docs/screenshots/home.png" width="46%" alt="Light home page with favorite doors and tap-to-open buttons"></a>
+  <a href="docs/screenshots/settings.png"><img src="docs/screenshots/settings.png" width="46%" alt="Dark settings page with themes, property selection, and app installation"></a>
+</p>
 
-These screenshots were captured against an isolated offline demonstration service. All accounts, properties, and doors are fictional; no real residents or devices are shown. They display the existing interface. The demonstration service is not included in production deployments.
+<p align="center"><sub>Light home / dark settings · Fictional data from an isolated demo. Select an image for full size.</sub></p>
 
-<table>
-  <tr>
-    <td align="center"><strong>Login and installation</strong><br><img src="docs/screenshots/login.png" width="240" alt="SMS login and PWA installation"></td>
-    <td align="center"><strong>Favorite doors</strong><br><img src="docs/screenshots/home.png" width="240" alt="Home screen door buttons"></td>
-    <td align="center"><strong>All doors</strong><br><img src="docs/screenshots/doors.png" width="240" alt="Door directory and reorder entry"></td>
-  </tr>
-  <tr>
-    <td align="center"><strong>Settings and properties</strong><br><img src="docs/screenshots/settings.png" width="240" alt="Dark theme, demo account, and property selection"></td>
-    <td align="center"><strong>Names and favorites</strong><br><img src="docs/screenshots/door-settings.png" width="240" alt="Door name and favorite position settings"></td>
-    <td align="center">Light / dark themes<br>Mobile browser / PWA</td>
-  </tr>
-</table>
+<details>
+<summary>More screens: sign-in, all doors, names and favorites</summary>
 
-## Built on the TYG SDK
+<p align="center">
+  <a href="docs/screenshots/login.png"><img src="docs/screenshots/login.png" width="30%" alt="SMS sign-in and mobile installation guidance"></a>
+  <a href="docs/screenshots/doors.png"><img src="docs/screenshots/doors.png" width="30%" alt="Full door list and ordering controls"></a>
+  <a href="docs/screenshots/door-settings.png"><img src="docs/screenshots/door-settings.png" width="30%" alt="Custom door names and favorite positions"></a>
+</p>
 
-OpenTYG communicates with the platform through **TYG Core SDK (`TygClient`)**. The SDK handles service configuration, image captchas, SMS and password login, property permissions, door authorization, and WebSocket directory and door messages. OpenTYG adds the web interface, browser sessions, authentication limits, encrypted storage, and user preferences.
+Screenshots show the existing interface. The production app includes neither a demo service nor demo accounts.
 
-```mermaid
-flowchart LR
-    UI[Mobile browser / PWA] --> Backend[OpenTYG backend]
-    Backend --> SDK[TYG Core SDK / TygClient]
-    SDK -->|HTTP + WebSocket| Platform[Taoyuangu platform]
-```
+</details>
 
-TYG Core SDK is an **unofficial protocol adapter**, not an SDK supplied or maintained by Taoyuangu. The application embeds a server-oriented adaptation under `server/vendor/tyg-core-sdk/`, with host restrictions, stable door identifiers, and credential handling changes. Its source differs from the standalone SDK. The web application currently provides door access and does not expose the standalone SDK's intercom features.
+## Everyday use
 
-The integrated SDK has no account-token renewal endpoint. Expired account credentials therefore require sign-in again, with invalid login state removed automatically. Expired property credentials are refreshed once within the existing connection deadline; ordinary network failures do not force sign-out. See the [credential lifecycle](docs/security.md#凭据生命周期--credential-lifecycle).
+- **Your regular doors, easy to find**: up to five favorites, custom names, drag ordering, and property switching.
+- **Browser or home-screen app**: touch layouts, light and dark themes, and PWA installation. The interface is currently in Simplified Chinese.
+- **Stay signed in when you choose**: SMS, password, and device verification; remembered sessions last up to 30 days. If the platform expires them sooner, sign in again without losing favorites or settings.
+- **Private state on your own server**: login restoration data and preferences are encrypted at rest. Upstream login tokens and door credentials never reach the browser.
 
-For your own clients, see the [opentyg-sdk branch](https://github.com/zjmdong/OpenTYG/tree/opentyg-sdk) and its [Taoyuangu platform API reference](https://github.com/zjmdong/OpenTYG/blob/opentyg-sdk/docs/platform-api.md). That reference describes platform HTTP, WebSocket, XML, and SIP/RTP protocols. The `docs/api.md` file in this branch documents OpenTYG's own backend.
+Door access requires a network connection. Recovery retries preparation and failures confirmed to precede dispatch. If a command may have been sent but no acknowledgment arrives, the result is unknown and the app does not resend it automatically. A platform success response does not prove that the physical lock opened.
 
 ## Quick start
 
-Install Docker and the Docker Compose plugin on your Linux server or NAS, then run:
+On a Linux server or NAS, prepare **Docker + the Docker Compose plugin**, **curl, OpenSSL, an HTTPS domain, and its certificate**, then run:
 
 ```sh
-curl -fsSL -o install.sh https://raw.githubusercontent.com/zjmdong/OpenTYG/main/install.sh && bash install.sh --lang=en
+curl -fsSL -o install.sh https://raw.githubusercontent.com/zjmdong/OpenTYG/main/install.sh && \
+  bash install.sh --lang=en
 ```
 
-Follow the prompts for your HTTPS address, storage location, and internal port; Enter accepts defaults. The installer prepares permissions and a first-time secret, writes one `docker-compose.yml`, pulls the image, and checks startup. No source checkout or `.env` is needed. Existing configuration and secrets are preserved by default.
+1. Enter your HTTPS address, data location, and internal port. Defaults usually work for the remaining prompts.
+2. Point your HTTPS reverse proxy at the internal target printed by the installer.
+3. Open the HTTPS address, sign in, and select an authorized property.
 
-Then configure an HTTPS reverse proxy using the address and target printed by the installer. See the short [deployment guide](docs/deployment.en.md).
+The installer creates Compose configuration and a first-time secret; no source checkout or `.env` is needed. Public images support **amd64 / arm64**. Keep the original data and secret when upgrading.
 
-[Container package](https://github.com/zjmdong/OpenTYG/pkgs/container/opentyg) · [Installer](install.sh) · [Compose reference](docker-compose.yml). Images support **amd64 / arm64** and anonymous pulls. Preserve data and the original secret when upgrading.
+**[Full deployment guide →](docs/deployment.en.md)** · [Container image](https://github.com/zjmdong/OpenTYG/pkgs/container/opentyg) · [Manual configuration](docs/configuration.en.md)
 
-## Install on a phone
+**Install on your phone**: use the install option in a supported Android browser, or Safari's “Share → Add to Home Screen” on iPhone. The offline page only asks you to reconnect; it does not cache account data or queue door commands.
 
-Open the HTTPS site in a supported Android browser and use the installation entry or the browser's install menu. On iPhone, use Safari's **Share → Add to Home Screen**. Automatic installation prompts depend on the browser's own policies.
+## Documentation and development
 
-Once installed, the application opens in a standalone window from the home screen. Door access requires a network connection. The offline page only asks you to reconnect; it never caches account data or queues or replays door commands.
-
-## Documentation
-
-| Document | Contents |
+| Your task | Start here |
 | --- | --- |
-| [Deployment](docs/deployment.en.md) / [中文](docs/deployment.md) | Docker, HTTPS, port forwarding, mobile installation, upgrades, and troubleshooting |
-| [Configuration](docs/configuration.md) | Environment variables, runtime identity, upstream hosts, and local development |
-| [Architecture](docs/architecture.md) | Browser, backend, platform services, and storage |
-| [Privacy and operations](docs/security.md) | Credential lifecycle, encryption boundaries, backup, and recovery |
-| [OpenTYG backend API](docs/api.md) | This application's sessions, directory context, door operations, and errors |
-| [TYG SDK and platform APIs](https://github.com/zjmdong/OpenTYG/tree/opentyg-sdk) | Standalone SDK, platform protocols, and development |
-| [Disclaimer](DISCLAIMER.md) | Unofficial status, responsible use, and authorization boundaries |
+| Install, upgrade, migrate, or troubleshoot | [Deployment](docs/deployment.en.md) |
+| Configure ports, secrets, and environment variables | [Configuration](docs/configuration.en.md) |
+| Read the code and follow door operations | [Architecture](docs/architecture.en.md) |
+| Understand sessions, privacy, and backups | [Privacy and operations](docs/security.en.md) |
+| Change the web client or use its backend | [Backend API](docs/api.en.md) · [Contributing](CONTRIBUTING.en.md) |
+| Build your own client on the platform protocol | [Standalone TYG SDK](https://github.com/zjmdong/OpenTYG/tree/opentyg-sdk) |
 
-## Security and operational boundaries
+Built with **Node.js 24+ · native JavaScript / CSS · PWA**. One process serves static files and the API, with no npm runtime dependencies. An embedded, unofficial TYG Core SDK handles platform communication. The web app does not offer intercom features. [All documentation →](docs/README.en.md)
 
-Production browser connections require HTTPS. The default upstream configuration permits HTTP/WS for compatibility. Public HTTPS protects the browser-to-proxy connection; it cannot encrypt backend communication with an HTTP upstream. Evaluate this boundary for your network and restrict the upstream host list. Disable HTTP compatibility if a verified HTTPS/WSS upstream becomes available.
+## Before deploying
 
-A successful platform acknowledgment does not guarantee that a physical lock opened. A connection loss or timeout after sending produces an unknown result, and the application does not resend automatically. Check the door before deciding whether to try again.
+- **HTTPS has a boundary**: the browser entry point requires HTTPS. Default upstream compatibility allows HTTP / WS; browser HTTPS does not encrypt plaintext traffic from the backend to the platform.
+- **One data directory, one instance**: multiple processes or containers cannot share writes. Back up data, the original secret, and configuration together.
+- **Existing permissions only**: this app grants no platform permissions and cannot guarantee continuing compatibility. See [privacy and operations](docs/security.en.md) and the [disclaimer](DISCLAIMER.md).
 
-Storage is designed for a single instance. Do not run multiple processes or containers against the same data directory. Never upload `data/`, `secrets/`, `.env`, certificate private keys, or runtime logs to a repository.
+## Contribute
 
-## Contributing
+Use [Issues](https://github.com/zjmdong/OpenTYG/issues) for bugs and ideas, and read [Contributing](CONTRIBUTING.en.md) before submitting code. Remove private information from screenshots and logs. Report vulnerabilities privately through [SECURITY.md](SECURITY.md).
 
-Use [Issues](https://github.com/zjmdong/OpenTYG/issues) for ordinary bug reports and suggestions, and Pull Requests for contributions. Read [CONTRIBUTING.md](CONTRIBUTING.md) first. For security concerns, follow [SECURITY.md](SECURITY.md) and do not publish account details, tokens, or sensitive reproduction information.
-
-## License
-
-OpenTYG source code is distributed under the [MIT License](LICENSE). This license does not cover third-party platform services, accounts, door hardware, or trademarks.
+Source code is available under the [MIT License](LICENSE). Third-party services, accounts, devices, and trademarks are outside its scope.

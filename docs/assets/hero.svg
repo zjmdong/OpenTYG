@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-labelledby="title desc">
+  <title id="title">OpenTYG — 门禁，回到主屏幕。</title>
+  <desc id="desc">自部署的桃园谷门禁网页客户端。右侧以首页圆形开门按钮与门框表现从手机到门禁的连接。</desc>
+  <rect width="1200" height="360" rx="24" fill="#101827"/>
+  <g id="door-frame" fill="none" stroke="#34435d" stroke-width="2">
+    <path d="M1002 304V56h136v248M974 304h190"/>
+    <path d="M1022 304V77l95 17v210"/>
+    <path d="M1096 196v18" stroke="#83aaff" stroke-width="4" stroke-linecap="round"/>
+    <path d="M908 180h94" stroke="#83aaff" stroke-dasharray="5 8"/>
+  </g>
+  <g id="home-button">
+    <circle cx="824" cy="180" r="111" fill="none" stroke="#263652" stroke-width="2"/>
+    <circle cx="824" cy="180" r="91" fill="#2f6bed"/>
+    <circle cx="824" cy="180" r="90" fill="none" stroke="#83aaff" stroke-width="2"/>
+    <g fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M807 170v-13a17 17 0 0 1 34 0v13"/>
+      <rect x="796" y="170" width="56" height="44" rx="9" fill="#ffffff" stroke="none"/>
+    </g>
+    <circle cx="824" cy="190" r="5" fill="#2f6bed"/>
+    <path d="M824 193v7" stroke="#2f6bed" stroke-width="4"/>
+  </g>
+  <g id="wordmark" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif">
+    <text x="60" y="78" fill="#a8b7d0" font-size="19" letter-spacing="3">SELF-HOSTED DOOR ACCESS</text>
+    <text x="56" y="180" fill="#ffffff" font-size="92" font-weight="700" letter-spacing="-4">Open<tspan fill="#83aaff">TYG</tspan></text>
+    <text x="60" y="253" fill="#ffffff" font-size="44" font-weight="600">门禁，回到主屏幕。</text>
+    <path d="M60 300h46" stroke="#83aaff" stroke-width="4"/>
+    <text x="122" y="307" fill="#a8b7d0" font-size="20">Browser · PWA · Docker</text>
+  </g>
+</svg>

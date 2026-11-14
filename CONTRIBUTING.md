@@ -1,25 +1,32 @@
-# 贡献指南 / Contributing
+# 贡献指南
 
-欢迎提交普通问题、功能建议和 Pull Request。先查找已有 Issue，描述预期行为、实际行为、版本、浏览器和部署方式。截图和日志需要去掉账号、房产地址、令牌、Cookie 和密钥。安全漏洞请使用 [安全报告流程](SECURITY.md)，不要公开细节。
+[项目首页](README.md) · [文档](docs/README.md) · [English](CONTRIBUTING.en.md)
 
-Welcome bug reports, suggestions, and Pull Requests. Search existing issues first, then describe expected and actual behavior, version, browser, and deployment method. Remove accounts, property addresses, tokens, cookies, and keys from screenshots and logs. Use the [security reporting process](SECURITY.md) for vulnerabilities.
+欢迎通过 Issue 报告问题、提出建议，或提交聚焦于一个问题的 Pull Request。
 
-## 开发 / Development
+## 报告问题
 
-使用 Node.js 24+，按 [配置参考](docs/configuration.md) 的回环开发步骤启动。服务没有 npm 运行时依赖；前端是原生 ES modules。使用独立数据与密钥，且只用获授权账号。开门验证会产生真实设备操作，应在可控现场进行。
+先搜索已有 Issue，再提供版本、浏览器、部署方式、复现步骤，以及预期和实际行为。截图与日志请去掉账号、房产地址、Cookie、令牌和密钥。漏洞使用 [安全报告流程](SECURITY.md)，不要公开可利用的细节。
 
-Use Node.js 24+ and the loopback setup in [configuration](docs/configuration.md). There are no npm runtime dependencies; the frontend uses native ES modules. Use separate development data and secrets and authorized accounts only. Door verification performs real hardware actions and belongs in a controlled setting.
+## 本机开发
 
-## 提交修改 / Submitting changes
+1. 使用 **Node.js 24+**，按 [本机开发](docs/configuration.md#本机开发) 配置回环地址、独立数据与密钥。
+2. 运行 `node server/index.mjs`；无需 `npm install` 或前端构建。
+3. 按 [架构说明](docs/architecture.md) 找到对应模块，按 [API 约定](docs/api.md) 核对交互。
 
-- 修改集中于一个清晰问题，说明行为变化和验证方式；同步更新中英文 README 或相关文档。
-- 检查修改文件的语法；登录、目录、门禁或存储变化应验证相关行为、权限边界和失败路径。UI 修改检查手机尺寸和深浅色主题。
-- 不添加自动重放开门、离线命令队列、凭据日志或在浏览器中保存上游秘密的实现。
-- 不提交 `.env`、data、secrets、日志、客户信息、APK、备份、临时测试工具或报告。使用虚构且明确标记的示例数据。
-- 不同进程不能共享写入数据目录；新增运行模式或持久格式时解释兼容性与恢复方式。
+仓库没有内置演示账号。真实登录和开门会访问平台与设备；仅使用获授权账号，在可控现场验证。
 
-Keep each change focused, explain the behavior and verification, and update the corresponding documentation in both languages. Check syntax and relevant success, failure, permission, and persistence behavior; verify UI changes on mobile and in both themes. Do not add automatic command replay, offline command queues, credential logs, or browser storage of upstream secrets. Do not commit configuration, private state, customer data, APKs, backups, temporary verification tools, or reports. Changes to runtime or storage formats should explain compatibility and recovery.
+## 提交前检查
 
-贡献的代码以本项目 [MIT 许可证](LICENSE) 发布。不要提交无权再分发的代码、资源或平台凭据。
+- 说明问题、行为变化和实际完成的验证，同步对应中英文文档。
+- 用 `node --check 文件路径` 检查修改的 JavaScript；CI 的 [Verify](.github/workflows/verify.yml) 还会检查容器和安装向导。
+- 登录、目录、门禁或存储修改，验证成功与失败路径、账号隔离、权限和恢复；UI 修改检查手机尺寸与深浅色主题。
+- 文档修改检查本地链接、代码块和 Markdown 预览；截图仅用虚构、明确标记的数据。
 
-Contributions are distributed under this project's [MIT License](LICENSE). Do not submit code, assets, or platform credentials you are not authorized to redistribute.
+当前 `package.json` 仅提供启动脚本，没有 `npm test`；请在 PR 中写清针对本次修改做了什么验证。
+
+## 保持这些约定
+
+不自动重放已发送的开门指令，不增加离线命令队列，不记录凭据，不在浏览器保存上游秘密。一个数据目录仅供一个进程写入；调整持久格式时说明兼容与恢复方式。
+
+不提交 `.env`、运行数据、密钥、日志、客户信息、APK、备份或临时测试报告。贡献代码和资源须有再分发权，并按项目 [MIT 许可证](LICENSE) 发布。

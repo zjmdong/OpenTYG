@@ -1,6 +1,6 @@
 # 安装 OpenTYG
 
-[English](deployment.en.md) · [返回 README](../README.md)
+[文档](README.md) / 部署 · [English](deployment.en.md)
 
 适用于 Linux 服务器和 NAS。支持 amd64 / arm64，不用下载源码。
 
@@ -11,7 +11,8 @@
 ## 2. 运行安装向导
 
 ```sh
-curl -fsSL -o install.sh https://raw.githubusercontent.com/zjmdong/OpenTYG/main/install.sh && bash install.sh
+curl -fsSL -o install.sh https://raw.githubusercontent.com/zjmdong/OpenTYG/main/install.sh && \
+  bash install.sh
 ```
 
 按提示填写；方括号是默认值，直接回车即可采用：
@@ -54,7 +55,9 @@ sudo docker compose stop                    # 停止服务
 sudo docker compose start                   # 启动服务
 ```
 
-**升级**：先备份，将 `docker-compose.yml` 的 `image` 改为 `ghcr.io/zjmdong/opentyg:1.2.5`，然后：
+### 升级
+
+先按下节备份，将 `docker-compose.yml` 的 `image` 改为目标版本，例如 `ghcr.io/zjmdong/opentyg:1.2.5`，然后：
 
 ```sh
 sudo docker compose pull
@@ -63,10 +66,21 @@ sudo docker compose up -d
 
 保留原数据目录、密钥和 UID:GID，升级后完全关闭手机应用再打开。使用环境变量模板的部署，改 `.env` 中的 `OPENTYG_VERSION` 即可。
 
-**备份 / 迁移**：停服，备份 Compose 文件及其中指定的数据目录、密钥文件（包含隐藏文件）；自定义目录也要一起备份。恢复时保留原密钥、文件所有者和权限。同一数据目录只运行一个实例。
+### 备份与迁移
 
-**打不开 / 403 / 502**：检查容器状态、反代目标、证书，以及公网地址和 Host 的端口是否一致。内部 HTTP 只供反代连接；登录请使用 HTTPS。
+停服，备份 Compose 文件及其中指定的完整数据目录（含隐藏文件）、密钥文件；自定义目录及使用中的 `.env` 也要备份。恢复时保留原密钥、文件所有者和权限。同一数据目录只运行一个实例，备份完成后可用 `sudo docker compose start` 恢复运行。
 
-**提示登录状态已失效**：重新登录即可，收藏和设置会保留；无需手工删除 `data/` 或密钥。平台凭据可能早于 30 天失效。
+## 排障
+
+| 现象 | 优先检查 |
+| --- | --- |
+| 无法打开页面 / 502 | 容器状态、反代目标、DNS 与证书；容器内的 `127.0.0.1` 不是 Docker 主机 |
+| 403 / 登录失败 | 浏览器是否使用配置的 HTTPS 地址；Host、Origin 和外部端口是否一致 |
+| 登录状态已失效 | 重新登录；收藏和设置保留，不必删除数据或密钥；平台可能早于 30 天使凭据失效 |
+| 门禁列表暂时无法加载 | 检查服务器到平台的网络与主机名单；普通网络故障不需要清空登录数据 |
+| 开门结果未知 | 核实现场门锁状态后再决定是否操作，不自动重发 |
+| 凭据存储不可用 | 检查原密钥、数据目录及 UID:GID；保留文件，不通过重新生成密钥“修复” |
+
+内部 HTTP 只供反代连接。浏览器直接访问后端地址可能被引导到 HTTPS 入口，登录仍应使用配置的公网地址。
 
 更多：[Nginx 示例](../deploy/nginx-opentyg.conf) · [配置参考](configuration.md) · [隐私与运维](security.md)。默认兼容平台 HTTP / WS；公网 HTTPS 不会加密后端到平台的 HTTP 通信。

@@ -1,6 +1,6 @@
 # Install OpenTYG
 
-[简体中文](deployment.md) · [Back to README](../README.en.md)
+[Docs](README.en.md) / Deployment · [简体中文](deployment.md)
 
 For Linux servers and NAS devices. Supports amd64 / arm64; no source download is needed.
 
@@ -11,7 +11,8 @@ Install and start **Docker and the Docker Compose plugin**, with curl and OpenSS
 ## 2. Run the installer
 
 ```sh
-curl -fsSL -o install.sh https://raw.githubusercontent.com/zjmdong/OpenTYG/main/install.sh && bash install.sh --lang=en
+curl -fsSL -o install.sh https://raw.githubusercontent.com/zjmdong/OpenTYG/main/install.sh && \
+  bash install.sh --lang=en
 ```
 
 Answer the prompts. Press Enter to accept the value in brackets:
@@ -54,7 +55,9 @@ sudo docker compose stop                    # Stop
 sudo docker compose start                   # Start
 ```
 
-**Upgrade:** back up, set `image` in `docker-compose.yml` to `ghcr.io/zjmdong/opentyg:1.2.5`, then:
+### Upgrade
+
+Back up as described below, set `image` in `docker-compose.yml` to the target version, for example `ghcr.io/zjmdong/opentyg:1.2.5`, then:
 
 ```sh
 sudo docker compose pull
@@ -63,10 +66,21 @@ sudo docker compose up -d
 
 Keep the original data directory, secret, and UID:GID. Fully close and reopen the phone app after upgrading. For an environment-variable template, update `OPENTYG_VERSION` in `.env` instead.
 
-**Backup / migrate:** stop the app and back up Compose plus its configured data directory and secret file, including hidden files and custom paths. Preserve the original key, ownership, and permissions on restore. Run only one instance per data directory.
+### Backup and migration
 
-**Cannot open / 403 / 502:** check container status, proxy target, certificate, and matching public address and Host ports. Internal HTTP is for the proxy; sign in over HTTPS.
+Stop the app and back up Compose, its complete data directory (including hidden files), and its secret file. Include custom paths and any `.env` in use. Preserve the original key, ownership, and permissions on restore. Run only one instance per data directory. After backing up, resume with `sudo docker compose start`.
 
-**Login expired:** sign in again; favorites and settings are retained. Do not manually delete `data/` or the secret. Platform credentials may expire before 30 days.
+## Troubleshooting
 
-More: [Nginx example](../deploy/nginx-opentyg.conf) · [Configuration](configuration.md) · [Privacy and operations](security.md). Default platform HTTP / WS compatibility remains enabled; public HTTPS does not encrypt backend-to-platform HTTP.
+| Symptom | Check first |
+| --- | --- |
+| Page unavailable / 502 | Container status, proxy target, DNS, and certificate; `127.0.0.1` inside a container is not the Docker host |
+| 403 / sign-in failure | Use the configured HTTPS address; match Host, Origin, and external port |
+| Expired login | Sign in again; favorites/settings remain. Do not delete data or secrets. Platform expiry may precede 30 days |
+| Directory temporarily unavailable | Check server-to-platform connectivity and allowed hosts; ordinary network failures do not require clearing login data |
+| Unknown door result | Verify the physical lock before another action; never resend automatically |
+| Credential storage unavailable | Check the original secret, data directory, and UID:GID; retain files rather than generating a replacement key |
+
+Internal HTTP is for the reverse proxy. Direct browser visits to the backend may redirect to HTTPS; use the configured public origin for sign-in.
+
+More: [Nginx example](../deploy/nginx-opentyg.conf) · [Configuration](configuration.en.md) · [Privacy and operations](security.en.md). Default platform HTTP / WS compatibility remains enabled; public HTTPS does not encrypt backend-to-platform HTTP.
